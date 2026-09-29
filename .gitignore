@@ -1,0 +1,23 @@
+build/
+cmake-build-*/
+out/
+.vs/
+*.user
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Sorties d'outillage (regenerables : voir README)
+build/frames/
+build/clip_check/
+
+# Blender
+*.blend1
+*.blend2
+
+# Sources graphiques non versionnees (voir NOTICE.md) : fichiers de travail
+# lourds, inutiles a la chaine d'export
+tools/source/*.paint
+tools/source/Gemini_Generated_Image*.jpg

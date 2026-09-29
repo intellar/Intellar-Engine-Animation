@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Graines du squelette de rabbit3 : utilise par tools/blender_make_rig.py pour",
+    "creer l'armature dans le .blend, puis par tools/blender_export.py pour relire.",
+    "Une fois l'armature posee dans Blender, c'est le .blend qui fait foi : ce",
+    "fichier ne sert plus qu'a regenerer une armature de depart.",
+    "anchor = fraction de la boite locale du plan : x 0=gauche 1=droite, y 0=bas 1=haut",
+    "(une valeur hors [0,1] est permise : -0.05 = 5% sous la boite).",
+    "dir = direction de l'os dans Blender (y vers le haut) -- sert aux angles d'os."
+  ],
+  "armature": "skeleton",
+  "bone_length": 0.35,
+  "bones": [
+    {"name": "root",  "parent": null,    "part": "torso", "anchor": [0.5, 0.0],  "dir": [0, 1]},
+    {"name": "torso", "parent": "root",  "part": "torso", "anchor": [0.5, 0.0],  "dir": [0, 1]},
+    {"name": "head",  "parent": "torso", "part": "head",  "anchor": [0.5, -0.05], "dir": [0, 1]},
+    {"name": "earL",  "parent": "head",  "part": "earL",  "anchor": [0.5, 0.0],  "dir": [0, 1]},
+    {"name": "earR",  "parent": "head",  "part": "earR",  "anchor": [0.5, 0.0],  "dir": [0, 1]},
+    {"name": "eyeL",  "parent": "head",  "part": "eyeL",  "anchor": [0.5, 0.5],  "dir": [0, 1]},
+    {"name": "eyeR",  "parent": "head",  "part": "eyeR",  "anchor": [0.5, 0.5],  "dir": [0, 1]},
+    {"name": "armL",  "parent": "torso", "part": "armL",  "anchor": [0.45, 0.9], "dir": [0, 1]},
+    {"name": "armR",  "parent": "torso", "part": "armR",  "anchor": [0.55, 0.9], "dir": [0, 1]},
+    {"name": "footL", "parent": "root",  "part": "footL", "anchor": [0.5, 0.85], "dir": [0, 1]},
+    {"name": "footR", "parent": "root",  "part": "footR", "anchor": [0.5, 0.85], "dir": [0, 1]}
+  ]
+}

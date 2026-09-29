@@ -1,0 +1,327 @@
+{
+  "id": "rabbit3",
+  "stage": {
+    "w": 240,
+    "h": 320
+  },
+  "fit": {
+    "units_height": 3.128615,
+    "ppu": 65.460276,
+    "origin": [
+      136.583739,
+      244.940773
+    ],
+    "height_frac": 0.64,
+    "feet_y": 300,
+    "center": "bbox",
+    "angles": "plane"
+  },
+  "source": {
+    "blend": "C:\\Users\\jnoue\\OneDrive\\Documents\\GitHub\\Intellar-Engine-Animation\\tools\\source\\rabbit3_rig.blend",
+    "blender": "5.1.2",
+    "scene_json": "../../build/rabbit3/scene.json"
+  },
+  "bones": [
+    {
+      "name": "root",
+      "parent": null,
+      "rest": [
+        136.58,
+        277.67
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "torso",
+      "parent": "root",
+      "rest": [
+        0.0,
+        0.0
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "head",
+      "parent": "torso",
+      "rest": [
+        -3.66,
+        -47.51
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "earL",
+      "parent": "head",
+      "rest": [
+        30.14,
+        -52.59
+      ],
+      "angle": 9.91
+    },
+    {
+      "name": "earR",
+      "parent": "head",
+      "rest": [
+        -52.5,
+        -50.73
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "eyeL",
+      "parent": "head",
+      "rest": [
+        14.66,
+        -38.31
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "eyeR",
+      "parent": "head",
+      "rest": [
+        -19.27,
+        -37.68
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "armL",
+      "parent": "torso",
+      "rest": [
+        28.75,
+        -54.33
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "armR",
+      "parent": "torso",
+      "rest": [
+        -39.93,
+        -52.41
+      ],
+      "angle": -15.5
+    },
+    {
+      "name": "footL",
+      "parent": "root",
+      "rest": [
+        20.73,
+        -11.13
+      ],
+      "angle": 0.0
+    },
+    {
+      "name": "footR",
+      "parent": "root",
+      "rest": [
+        -28.27,
+        -9.86
+      ],
+      "angle": 0.0
+    }
+  ],
+  "parts": [
+    {
+      "name": "torso",
+      "bone": "torso",
+      "image": "../source/torso.png",
+      "png_size": [
+        580,
+        524
+      ],
+      "sprite": [
+        72,
+        65
+      ],
+      "pivot": [
+        36.0,
+        65.0
+      ],
+      "angle": 0.0,
+      "draw_order": 0,
+      "z": 0.0
+    },
+    {
+      "name": "armL",
+      "bone": "armL",
+      "image": "../source/armL.png",
+      "png_size": [
+        317,
+        363
+      ],
+      "sprite": [
+        50,
+        58
+      ],
+      "pivot": [
+        22.5,
+        5.8
+      ],
+      "angle": 0.0,
+      "draw_order": 1,
+      "z": 0.1
+    },
+    {
+      "name": "armR",
+      "bone": "armR",
+      "image": "../source/armR.png",
+      "png_size": [
+        290,
+        327
+      ],
+      "sprite": [
+        50,
+        56
+      ],
+      "pivot": [
+        27.5,
+        5.6
+      ],
+      "angle": -15.5,
+      "draw_order": 2,
+      "z": 0.1
+    },
+    {
+      "name": "footL",
+      "bone": "footL",
+      "image": "../source/footL.png",
+      "png_size": [
+        371,
+        271
+      ],
+      "sprite": [
+        53,
+        39
+      ],
+      "pivot": [
+        26.5,
+        5.85
+      ],
+      "angle": 0.0,
+      "draw_order": 3,
+      "z": 0.1
+    },
+    {
+      "name": "footR",
+      "bone": "footR",
+      "image": "../source/footR.png",
+      "png_size": [
+        387,
+        286
+      ],
+      "sprite": [
+        51,
+        38
+      ],
+      "pivot": [
+        25.5,
+        5.7
+      ],
+      "angle": 0.0,
+      "draw_order": 4,
+      "z": 0.1
+    },
+    {
+      "name": "earL",
+      "bone": "earL",
+      "image": "../source/earL.png",
+      "png_size": [
+        326,
+        639
+      ],
+      "sprite": [
+        41,
+        80
+      ],
+      "pivot": [
+        20.5,
+        80.0
+      ],
+      "angle": 9.91,
+      "draw_order": 5,
+      "z": 0.2
+    },
+    {
+      "name": "earR",
+      "bone": "earR",
+      "image": "../source/earR.png",
+      "png_size": [
+        618,
+        419
+      ],
+      "sprite": [
+        75,
+        51
+      ],
+      "pivot": [
+        37.5,
+        51.0
+      ],
+      "angle": 0.0,
+      "draw_order": 6,
+      "z": 0.2
+    },
+    {
+      "name": "head",
+      "bone": "head",
+      "image": "../source/head.png",
+      "png_size": [
+        593,
+        491
+      ],
+      "sprite": [
+        79,
+        65
+      ],
+      "pivot": [
+        39.5,
+        68.25
+      ],
+      "angle": 0.0,
+      "draw_order": 7,
+      "z": 0.3
+    },
+    {
+      "name": "eyeL",
+      "bone": "eyeL",
+      "image": "../source/eyeL.png",
+      "png_size": [
+        192,
+        159
+      ],
+      "sprite": [
+        26,
+        21
+      ],
+      "pivot": [
+        13.0,
+        10.5
+      ],
+      "angle": 0.0,
+      "draw_order": 8,
+      "z": 0.4
+    },
+    {
+      "name": "eyeR",
+      "bone": "eyeR",
+      "image": "../source/eyeR.png",
+      "png_size": [
+        201,
+        170
+      ],
+      "sprite": [
+        26,
+        22
+      ],
+      "pivot": [
+        13.0,
+        11.0
+      ],
+      "angle": 0.0,
+      "draw_order": 9,
+      "z": 0.4
+    }
+  ]
+}
