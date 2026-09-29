@@ -8,12 +8,12 @@
     "units_height": 3.128615,
     "ppu": 65.460276,
     "origin": [
-      136.583739,
+      123.304402,
       244.940773
     ],
     "height_frac": 0.64,
     "feet_y": 300,
-    "center": "bbox",
+    "center": "feet",
     "angles": "plane"
   },
   "source": {
@@ -26,7 +26,7 @@
       "name": "root",
       "parent": null,
       "rest": [
-        136.58,
+        123.3,
         277.67
       ],
       "angle": 0.0
