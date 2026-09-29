@@ -30,7 +30,8 @@ un petit saut sur place et replonge. Images rendues à partir du binaire
    `intellar_anim_demo --bench 2000`).
 3. **Un outillage Blender → squelette** (`tools/`) : le rig se pose à la souris
    dans Blender (les articulations se voient), puis tout le reste — échelle,
-   pistes, pivots, ordre de dessin, empaquetage — est calculé automatiquement.
+   ligne de pieds, pivots ramenés dans l'image, ordre de dessin, empaquetage —
+   est calculé automatiquement.
 4. **Une vérification croisée** : le même rendu est implémenté en Python et en
    C++, et `tools/iska_clip_check.py` prouve que les deux donnent **des images
    identiques octet par octet** (94 images sur `rabbit3`). Un bug de l'un se voit
