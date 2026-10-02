@@ -4,11 +4,11 @@ Public demo of **bone animation** (skeleton + cut-out parts) for Intellar-Engine
 a **rabbit3** pixel-art character, rigged and animated, played on the **ILI9341
 240x320** panel (the portrait format of the robot).
 
-![Contact sheet of the peek animation](docs/img/rabbit3_peek.png)
+![Contact sheet of the idle_loop animation](docs/img/rabbit3_idle.png)
 
-*`peek`: the rabbit is off-frame, springs out, looks left then right, hops in
-place and dives back. Frames rendered from the `assets/rabbit3.iska` binary by
-`tools/iska_preview.py`.*
+*`idle_loop`: breathing + a wind balance, with a blink and ears that trail the
+sway -- 2.4 s, loops seamlessly. Frames rendered from the `assets/rabbit3.iska`
+binary by `tools/iska_preview.py`.*
 
 | | |
 | :--- | :--- |
