@@ -16,11 +16,11 @@ void blitPart(uint16_t* dst, int dstW, int dstH,
               double jointX, double jointY,
               double angleDeg, double scaleX, double scaleY) {
     if (!dst || !sprite || spriteW <= 0 || spriteH <= 0 || dstW <= 0 || dstH <= 0) return;
-    // une echelle nulle n'a pas de sens : on la borne (comme cote Python)
+    // a null scale makes no sense: clamp it (as the Python side does)
     const double sx = (std::fabs(scaleX) > 1e-6) ? scaleX : 1e-6;
     const double sy = (std::fabs(scaleY) > 1e-6) ? scaleY : 1e-6;
 
-    // meme conversion que math.radians() de Python (angDeg * (pi / 180))
+    // same conversion as Python's math.radians() (angDeg * (pi / 180))
     const double a     = angleDeg * kDegToRad;
     const double cosA  = std::cos(a);
     const double sinA  = std::sin(a);
@@ -29,7 +29,7 @@ void blitPart(uint16_t* dst, int dstW, int dstH,
     const double jx    = jointX;
     const double jy    = jointY;
 
-    // boite englobante des quatre coins de la case, apres rotation + echelle
+    // bounding box of the four corners of the box, after rotation + scaling
     const double cxs[4] = {0.0, static_cast<double>(spriteW), static_cast<double>(spriteW), 0.0};
     const double cys[4] = {0.0, 0.0, static_cast<double>(spriteH), static_cast<double>(spriteH)};
     double minX = 0.0, minY = 0.0, maxX = 0.0, maxY = 0.0;
@@ -64,7 +64,7 @@ void blitPart(uint16_t* dst, int dstW, int dstH,
         uint16_t*     row = dst + static_cast<size_t>(y) * dstW;
         for (int x = x0; x <= x1; x++) {
             const double dx = (static_cast<double>(x) + 0.5) - jx;
-            // R(-a) puis inverse de l'echelle, puis retour dans la case sprite
+            // R(-a), then the inverse of the scale, then back into the sprite box
             const double rx = dx * cosA + dy * sinA;
             const double ry = -dx * sinA + dy * cosA;
             const double u  = px + rx * invSx;

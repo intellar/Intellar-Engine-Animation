@@ -1,51 +1,50 @@
-# Notice — licences et provenances
+# Notice -- licenses and provenance
 
-Ce dépôt est publié sous **MIT** (voir `LICENSE`). Il ne contient **aucune ligne**
-de code provenant des dépôts privés Intellar-CyberAnima / Intellar-Engine : le
-format ISKA, le chargeur, le lecteur d'animations et l'outillage Blender/Python
-ont été écrits pour ce dépôt.
+This repository is published under **MIT** (see `LICENSE`). It contains **no line**
+of code coming from the private Intellar-Engine repositories: the ISKA format, the
+loader, the animation player and the Blender/Python tooling were written for this
+repository.
 
-## Code tiers embarqué (vendored)
+## Vendored third-party code
 
-| Chemin | Origine | Licence |
+| Path | Origin | License |
 | :--- | :--- | :--- |
-| `third_party/lcd/` (`Drivers/LCD.h`, `Drivers/LCD.cpp`) | [Intellar-Engine-Simulator](https://github.com/Intellar-Robotics/Intellar-Engine-Simulator) — ecran simule ILI9341 sur SDL2, par le meme auteur | MIT (`third_party/lcd/LICENSE`) |
-| `third_party/lcd/LICENSE` | copie du fichier de licence d'origine | MIT |
+| `third_party/lcd/` (`Drivers/LCD.h`, `Drivers/LCD.cpp`) | [Intellar-Engine-Simulator](https://github.com/Intellar-Robotics/Intellar-Engine-Simulator) -- simulated ILI9341 screen on SDL2, by the same author | MIT (`third_party/lcd/LICENSE`) |
+| `third_party/lcd/LICENSE` | copy of the original license file | MIT |
 
-Ces deux fichiers sont recopies **tels quels** : aucune modification n'y a été
-apportée, afin que le simulateur d'origine et cette démo puissent être mis à jour
-indépendamment. Si vous modifiez le comportement de l'écran, changez-le plutôt
-dans le dépôt d'origine puis recopiez-le ici.
+These two files are copied **verbatim**: no modification was made to them, so that
+the original simulator and this demo can be updated independently. If you change
+the behaviour of the screen, change it in the original repository instead, then
+copy it here again.
 
-## Dépendances non embarquées (récupérées au build)
+## Dependencies not vendored (fetched at build time)
 
-| Dépendance | Utilisée par | Licence |
+| Dependency | Used by | License |
 | :--- | :--- | :--- |
-| [SDL2](https://github.com/libsdl-org/SDL) (release-2.28.5) | écran simule, fenêtre de la démo | zlib |
-| [Pillow](https://python-pillow.org/) | outillage Python (`tools/*.py`) | MIT-CMU |
-| [Blender](https://www.blender.org/) | source des plans (`tools/source/*.blend`) | GPL — utilisé comme outil, pas embarqué |
-| [CMake](https://cmake.org/) | build C++ | BSD-3-Clause |
+| [SDL2](https://github.com/libsdl-org/SDL) (release-2.28.5) | simulated screen, demo window | zlib |
+| [Pillow](https://python-pillow.org/) | Python tooling (`tools/*.py`) | MIT-CMU |
+| [Blender](https://www.blender.org/) | source of the planes (`tools/source/*.blend`) | GPL -- used as a tool, not embedded |
+| [CMake](https://cmake.org/) | C++ build | BSD-3-Clause |
 
-SDL2 est téléchargé par `FetchContent` au premier `cmake -B build` ; il n'est pas
-versionné ici.
+SDL2 is downloaded by `FetchContent` at the first `cmake -B build`; it is not
+versioned here.
 
 ## Art
 
-Les PNG de `tools/source/` (personnage **rabbit3**) et le fichier
-`rabbit3.blend` proviennent du travail de l'auteur de ce dépôt et ne sont **pas**
-couverts par la licence MIT du code : ils restent la propriété de leur auteur,
-qui autorise leur utilisation dans le cadre de cette démo. Ne les réutilisez pas
-hors de ce dépôt sans autorisation.
+The PNGs in `tools/source/` (character **rabbit3**) and the `rabbit3.blend` file
+come from the work of this repository's author and are **not** covered by the MIT
+license of the code: they remain the property of their author, who allows their use
+within this demo. Do not reuse them outside this repository without permission.
 
-Ne sont **pas** versionnés dans ce dépôt (voir `.gitignore`), car inutiles à la
-chaîne d'export et lourds :
+These are **not** versioned in this repository (see `.gitignore`), because they are
+useless to the export chain and heavy:
 
-* `tools/source/full.paint` — le fichier de peinture d'origine (~3,7 Mo) ;
-* `tools/source/Gemini_Generated_Image_*.jpg` — l'image de référence qui a servi
-  de base au découpage des plans (~1,4 Mo).
+* `tools/source/full.paint` -- the original paint file (~3.7 MB);
+* `tools/source/Gemini_Generated_Image_*.jpg` -- the reference image that was used
+  as a basis for cutting out the planes (~1.4 MB).
 
-Seuls les PNG découpés (`armL.png`, `torso.png`, …) et les `.blend` sont
-nécessaires pour reconstruire `assets/rabbit3.iska`.
+Only the cut-out PNGs (`armL.png`, `torso.png`, ...) and the `.blend` files are
+needed to rebuild `assets/rabbit3.iska`.
 
-Si vous publiez une démo avec vos propres personnages, remplacez simplement les
-PNG et le `.blend`, puis relancez la chaîne d'export (voir README).
+If you publish a demo with your own characters, simply replace the PNGs and the
+`.blend`, then run the export chain again (see README).

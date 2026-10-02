@@ -1,37 +1,37 @@
-"""Calcule le rig moteur (coordonnees ecran, pixels) depuis l'export Blender.
+"""Computes the engine rig (screen coordinates, in pixels) from the Blender export.
 
     python tools/rig_build.py build/rabbit3/scene.json --id rabbit3 \
         --out tools/rigs/rabbit3.json [--preview build/rabbit3/rig_preview.png]
 
-Entree  : `build/rabbit3/scene.json` (tools/blender_export.py) -- plans places
-          dans Blender + armature.
-Sortie  : `tools/rigs/rabbit3.json` -- **rig runtime** : tout est converti en
-          pixels ecran du panneau (240x320), pret a etre empaquete en .iska.
+Input : `build/rabbit3/scene.json` (tools/blender_export.py) -- planes placed in
+         Blender + armature.
+Output: `tools/rigs/rabbit3.json` -- **runtime rig**: everything is converted to
+         screen pixels of the panel (240x320), ready to be packed into an .iska.
 
 Conventions
 -----------
-* Blender : X a droite, Y vers le haut, Z vers l'ecran (plus grand = devant).
-* Moteur  : X a droite, Y vers le bas, angle en degres **horaire** (0 = sprite
-  droit). La conversion retourne donc Y (`stage_y = origin_y - wy * ppu`) et
-  l'angle (`angle = -rot_z`).
+* Blender: X to the right, Y upwards, Z towards the screen (larger = in front).
+* Engine : X to the right, Y downwards, angle in degrees **clockwise** (0 = upright
+  sprite). The conversion therefore flips Y (`stage_y = origin_y - wy * ppu`) and
+  the angle (`angle = -rot_z`).
 
-Ce que le script deduit, sans intervention a la main :
+What the script derives, with no manual intervention:
 
-1. **Echelle** (`ppu`, pixels par unite Blender) : le personnage entier (toutes
-   ses parts, rotations comprises) mesure `--height-frac` de la hauteur du
-   panneau (0.64 -> 205 px sur 320).
-2. **Placement** : la ligne de pieds posee a `--feet-y` px, le personnage centre
-   sur l'axe du panneau (`--center bbox|torso|feet|<unites>`).
-3. **Par part** : taille de la case sprite (arrondie), **pivot** (= tete de l'os
-   ramenee dans l'image du plan), angle de repos, ordre de dessin (Z Blender).
-4. **Par os** : parent, position de repos relative au parent, angle de repos.
+1. **Scale** (`ppu`, pixels per Blender unit): the whole character (all of its
+   parts, rotations included) measures `--height-frac` of the panel height
+   (0.64 -> 205 px out of 320).
+2. **Placement**: the feet line is set at `--feet-y` px, the character is centred
+   on the panel axis (`--center bbox|torso|feet|<units>`).
+3. **Per part**: sprite box size (rounded), **pivot** (= bone head brought back
+   into the plane's image), rest angle, draw order (Blender Z).
+4. **Per bone**: parent, rest position relative to the parent, rest angle.
 
-`--angles plane` (defaut) : l'angle de repos vient de la rotation du plan dans
-Blender, le rendu colle donc exactement au placement d'origine.
-`--angles bone` : l'angle vient de la direction de l'os (head -> tail) ; utile
-si vous avez redresse les os pour definir la pose de reference.
+`--angles plane` (default): the rest angle comes from the plane's rotation in
+Blender, so the render matches the original placement exactly.
+`--angles bone`: the angle comes from the bone direction (head -> tail); useful if
+you straightened the bones to define the reference pose.
 
-Le rig produit reste editable a la main : c'est lui que lit `iska_pack.py`.
+The resulting rig stays hand-editable: this is what `iska_pack.py` reads.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ import iska_common as iska
 
 
 # --------------------------------------------------------------------------- #
-# maths 2D (dans l'export, les matrices Blender sont en matrix[ligne][colonne])
+# 2D maths (in the export, the Blender matrices are matrix[row][column])
 # --------------------------------------------------------------------------- #
 
 def mat22(matrix):
@@ -64,19 +64,19 @@ def apply(m, v):
 def invert(m):
     det = m[0] * m[3] - m[1] * m[2]
     if abs(det) < 1e-12:
-        raise ValueError("matrice de plan non inversible (echelle nulle ?)")
+        raise ValueError("plane matrix is not invertible (zero scale?)")
     return (m[3] / det, -m[1] / det, -m[2] / det, m[0] / det)
 
 
 def world_to_local(part, point):
-    """Point monde -> repere du plan (case locale, avant rotation/echelle)."""
+    """World point -> plane frame (local box, before rotation/scale)."""
     return apply(invert(mat22(part["matrix"])),
                  (point[0] - translation(part["matrix"])[0],
                   point[1] - translation(part["matrix"])[1]))
 
 
 def part_size_units(part):
-    """Taille du plan en unites Blender (boite locale x echelle du plan)."""
+    """Plane size in Blender units (local box x plane scale)."""
     local = part["local"]
     m = mat22(part["matrix"])
     return ((local[2] - local[0]) * math.hypot(m[0], m[2]),
@@ -86,7 +86,7 @@ def part_size_units(part):
 # --------------------------------------------------------------------------- #
 
 def order_bones(bones_in):
-    """Os avec les parents **avant** les enfants (invariant du format ISKA)."""
+    """Bones with the parents **before** the children (ISKA format invariant)."""
     by_name = {b["name"]: b for b in bones_in}
     ordered = []
     seen = set()
@@ -95,11 +95,11 @@ def order_bones(bones_in):
         if bone["name"] in seen:
             return
         if bone["name"] in chain:
-            raise SystemExit(f"cycle d'os autour de {bone['name']}")
+            raise SystemExit(f"bone cycle around {bone['name']}")
         parent = bone.get("parent")
         if parent:
             if parent not in by_name:
-                raise SystemExit(f"os {bone['name']} : parent inconnu {parent}")
+                raise SystemExit(f"bone {bone['name']}: unknown parent {parent}")
             visit(by_name[parent], chain + (bone["name"],))
         seen.add(bone["name"])
         ordered.append(bone)
@@ -113,17 +113,17 @@ def build(scene: dict, args) -> dict:
     parts_in = scene["parts"]
     bones_in = order_bones((scene.get("armature") or {}).get("bones") or [])
     if not bones_in:
-        raise SystemExit("scene.json ne contient aucune armature : lancez d'abord "
-                         "tools/blender_make_rig.py, ou posez l'armature dans Blender.")
+        raise SystemExit("scene.json contains no armature: run "
+                         "tools/blender_make_rig.py first, or place the armature in Blender.")
 
-    # 1. echelle : hauteur reelle du personnage (boites monde, rotations comprises)
+    # 1. scale: real height of the character (world boxes, rotations included)
     ys = [v for p in parts_in for v in (p["world_bbox"][1], p["world_bbox"][3])]
     xs = [v for p in parts_in for v in (p["world_bbox"][0], p["world_bbox"][2])]
     units_h = max(ys) - min(ys)
     stage_w, stage_h = args.stage_w, args.stage_h
     ppu = (args.height_frac * stage_h) / units_h
 
-    # 2. placement : ligne de pieds + centrage
+    # 2. placement: feet line + centring
     torso = next((p for p in parts_in if p["name"].lower().startswith("torso")), None)
     if args.center == "bbox" or torso is None:
         center_units = 0.5 * (min(xs) + max(xs))
@@ -140,7 +140,7 @@ def build(scene: dict, args) -> dict:
     def to_stage(point):
         return (origin[0] + point[0] * ppu, origin[1] - point[1] * ppu)
 
-    # 3. os : position de repos relative a la tete du parent
+    # 3. bones: rest position relative to the parent's head
     bone_index = {b["name"]: i for i, b in enumerate(bones_in)}
     heads = {b["name"]: to_stage(b["head"]) for b in bones_in}
     bones_out = []
@@ -154,10 +154,10 @@ def build(scene: dict, args) -> dict:
             rest = (head[0] - ph[0], head[1] - ph[1])
         bones_out.append({"name": bone["name"], "parent": parent,
                           "rest": [round(rest[0], 2), round(rest[1], 2)],
-                          "angle": 0.0})   # rempli par la part attachee
+                          "angle": 0.0})   # filled in by the attached part
     bone_by_name = {b["name"]: b for b in bones_out}
 
-    # 4. parts : case sprite, pivot (tete d'os dans l'image), angle, ordre
+    # 4. parts: sprite box, pivot (bone head inside the image), angle, order
     parts_out = []
     for order, part in enumerate(sorted(parts_in, key=lambda p: (p["z"], p["name"]))):
         name = part["name"]
@@ -222,10 +222,11 @@ def build(scene: dict, args) -> dict:
 # --------------------------------------------------------------------------- #
 
 def preview(rig: dict, base_dir: str, out_path: str, scale: int = 3) -> None:
-    """Rendu du rig au repos : sprites + os + articulations, pour controler a l'oeil.
+    """Render of the rig at rest: sprites + bones + joints, for visual checking.
 
-    Le dessin passe par le blitter partage (`iska_common.blit_part`), donc cet
-    apercu est un rendu **fidele** du moteur : s'il est faux, le runtime l'est aussi.
+    Drawing goes through the shared blitter (`iska_common.blit_part`), so this
+    preview is a **faithful** rendering of the engine: if it is wrong, the runtime
+    is wrong too.
     """
     skeleton = iska.Skeleton(rig)
     width, height = skeleton.stage_w, skeleton.stage_h
@@ -259,25 +260,25 @@ def preview(rig: dict, base_dir: str, out_path: str, scale: int = 3) -> None:
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     canvas.resize((width * scale, height * scale), Image.NEAREST).save(out_path)
-    print(f"[rig_build] apercu du rig (x{scale}) -> {out_path}")
+    print(f"[rig_build] rig preview (x{scale}) -> {out_path}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("scene", help="JSON produit par tools/blender_export.py")
+    ap.add_argument("scene", help="JSON produced by tools/blender_export.py")
     ap.add_argument("--id", default="rabbit3")
-    ap.add_argument("--out", required=True, help="JSON de rig a ecrire")
+    ap.add_argument("--out", required=True, help="rig JSON to write")
     ap.add_argument("--stage-w", type=int, default=240)
     ap.add_argument("--stage-h", type=int, default=320)
     ap.add_argument("--height-frac", type=float, default=0.64,
-                    help="hauteur du personnage en fraction de la hauteur du panneau")
+                    help="character height as a fraction of the panel height")
     ap.add_argument("--feet-y", type=int, default=300,
-                    help="y (px) de la ligne de pieds")
+                    help="y (px) of the feet line")
     ap.add_argument("--center", default="feet",
-                    help="feet (defaut) | bbox | torso | valeur en unites Blender")
+                    help="feet (default) | bbox | torso | value in Blender units")
     ap.add_argument("--angles", choices=("plane", "bone"), default="plane",
-                    help="origine de l'angle de repos : plan Blender ou direction d'os")
-    ap.add_argument("--preview", default=None, help="PNG de controle du rig au repos")
+                    help="origin of the rest angle: Blender plane or bone direction")
+    ap.add_argument("--preview", default=None, help="control PNG of the rig at rest")
     args = ap.parse_args()
 
     with open(args.scene, encoding="utf-8") as fh:
@@ -291,17 +292,17 @@ def main() -> None:
         fh.write("\n")
 
     fit = rig["fit"]
-    print(f"[rig_build] {len(rig['bones'])} os, {len(rig['parts'])} parts -> {out_path}")
-    print(f"[rig_build] {fit['units_height']:.3f} unites -> {fit['ppu']:.3f} px/unite "
-          f"(personnage {fit['units_height'] * fit['ppu']:.1f} px de haut), "
-          f"origine ({fit['origin'][0]:.1f}, {fit['origin'][1]:.1f})")
+    print(f"[rig_build] {len(rig['bones'])} bones, {len(rig['parts'])} parts -> {out_path}")
+    print(f"[rig_build] {fit['units_height']:.3f} units -> {fit['ppu']:.3f} px/unit "
+          f"(character {fit['units_height'] * fit['ppu']:.1f} px tall), "
+          f"origin ({fit['origin'][0]:.1f}, {fit['origin'][1]:.1f})")
     for part in rig["parts"]:
-        print(f"[rig_build]   {part['name']:6s} os={part['bone']:6s} "
-              f"case={part['sprite'][0]}x{part['sprite'][1]} "
+        print(f"[rig_build]   {part['name']:6s} bone={part['bone']:6s} "
+              f"box={part['sprite'][0]}x{part['sprite'][1]} "
               f"pivot=({part['pivot'][0]:.1f},{part['pivot'][1]:.1f}) "
-              f"angle={part['angle']:+.1f} ordre={part['draw_order']}")
+              f"angle={part['angle']:+.1f} order={part['draw_order']}")
     for bone in rig["bones"]:
-        print(f"[rig_build]   os {bone['name']:6s} parent={str(bone['parent']):6s} "
+        print(f"[rig_build]   bone {bone['name']:6s} parent={str(bone['parent']):6s} "
               f"rest=({bone['rest'][0]:+.1f},{bone['rest'][1]:+.1f}) "
               f"angle={bone['angle']:+.1f}")
 
@@ -311,4 +312,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

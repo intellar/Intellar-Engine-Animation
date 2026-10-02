@@ -1,26 +1,26 @@
 /**
- * Demo Intellar-Engine-Animation : joue `assets/rabbit3.iska` sur l'ecran
- * simule (SDL2) du repertoire Intellar-Engine-Simulator.
+ * Intellar-Engine-Animation demo: plays `assets/rabbit3.iska` on the simulated
+ * screen (SDL2) of the Intellar-Engine-Simulator repository.
  *
- * Deux modes :
+ * Two modes:
  *
- *  1. **Fenetre** (defaut) : panneau 240x320 (le setup portrait reel), l'ecran
- *     affiche la boucle d'inactivite ; un clic (tactile simule) declenche
- *     l'animation one-shot, puis on revient a la boucle.
+ *  1. **Window** (default): 240x320 panel (the real portrait setup); the screen
+ *     shows the idle loop, a click (simulated touch) triggers the one-shot
+ *     animation, then it goes back to the loop.
  *
  *         intellar_anim_demo --iska assets/rabbit3.iska
  *         intellar_anim_demo --iska assets/rabbit3.iska --auto 5000
  *
- *  2. **Capture** (`--dump DIR`) : aucune fenetre, aucun SDL. Rend les images
- *     dans des BMP (+ fichiers .565 bruts) : c'est le mode qui sert a verifier
- *     le rendu sans ecran, et a le comparer a `tools/iska_preview.py`.
+ *  2. **Capture** (`--dump DIR`): no window, no SDL. Renders the frames into
+ *     BMP files (+ raw .565 files): this is the mode used to check the render
+ *     without a screen, and to compare it with `tools/iska_preview.py`.
  *
  *         intellar_anim_demo --iska assets/rabbit3.iska --dump build/frames \
  *             --anim all --keys
  *
- * Chaque image capturee est accompagnee d'une empreinte FNV-1a : la meme
- * empreinte est calculee cote Python (`tools/iska_clip_check.py`), ce qui permet
- * de prouver que les deux rendus sont identiques au pixel pres.
+ * Every captured frame comes with an FNV-1a fingerprint: the very same
+ * fingerprint is computed on the Python side (`tools/iska_clip_check.py`),
+ * which proves that both renderers are identical down to the pixel.
  */
 #include <cstdint>
 #include <cstdio>
@@ -38,33 +38,33 @@ namespace {
 
 struct Options {
     std::string iska      = "assets/rabbit3.iska";
-    std::string idle      = "";        // animation de fond (defaut : la 1ere boucle)
-    std::string oneShot   = "peek";    // animation declenchee par un clic
-    std::string dumpDir   = "";        // mode capture (sans fenetre)
-    std::string anim      = "";        // animation a capturer ("all" = toutes)
-    std::vector<uint32_t> at;          // instants explicites (ms)
-    int         frames    = 0;         // images reparties (si --at absent)
-    bool        keys      = false;     // capturer aux cles (+ milieux)
-    bool        raw       = true;      // ecrire aussi les .565 bruts
-    uint32_t    autoMs    = 0;         // one-shot periodique (fenetre)
-    int         bench     = 0;         // --bench N : N images rendues sans ecriture
+    std::string idle      = "";        // background animation (default: first loop)
+    std::string oneShot   = "peek";    // animation triggered by a click
+    std::string dumpDir   = "";        // capture mode (no window)
+    std::string anim      = "";        // animation to capture ("all" = every one)
+    std::vector<uint32_t> at;          // explicit times (ms)
+    int         frames    = 0;         // evenly spaced frames (when --at is absent)
+    bool        keys      = false;     // capture on the keys (+ in between)
+    bool        raw       = true;      // also write the raw .565 files
+    uint32_t    autoMs    = 0;         // periodic one-shot (window)
+    int         bench     = 0;         // --bench N: N frames rendered, nothing written
     uint16_t    background = 0x0000;
 };
 
 void usage() {
     std::printf(
-        "intellar_anim_demo --iska FICHIER [options]\n"
-        "  --idle NOM      animation de fond (defaut : la premiere en boucle)\n"
-        "  --once NOM      animation jouee sur clic (defaut : peek)\n"
-        "  --auto MS       rejoue le one-shot toutes les MS ms (0 = jamais)\n"
-        "  --bg R,G,B      couleur de fond (defaut 0,0,0)\n"
-        "  --dump DIR      capture d'images sans fenetre (BMP + .565)\n"
-        "  --anim NOM|all  animation a capturer\n"
-        "  --at t0,t1,...  instants captures en ms\n"
-        "  --frames N      nombre d'images reparties sur la duree\n"
-        "  --keys          capturer a chaque cle et entre les cles\n"
-        "  --bench N       rend N images (sans rien ecrire) et affiche le temps moyen\n"
-        "  --no-raw        ne pas ecrire les .565 bruts\n");
+        "intellar_anim_demo --iska FILE [options]\n"
+        "  --idle NAME     background animation (default: the first looping one)\n"
+        "  --once NAME     animation played on click (default: peek)\n"
+        "  --auto MS       replays the one-shot every MS ms (0 = never)\n"
+        "  --bg R,G,B      background colour (default 0,0,0)\n"
+        "  --dump DIR      frame capture without a window (BMP + .565)\n"
+        "  --anim NAME|all animation to capture\n"
+        "  --at t0,t1,...  captured times, in ms\n"
+        "  --frames N      number of frames spread over the duration\n"
+        "  --keys          capture on every key and between the keys\n"
+        "  --bench N       renders N frames (writes nothing) and prints the mean time\n"
+        "  --no-raw        do not write the raw .565 files\n");
 }
 
 bool parseOptions(int argc, char** argv, Options& opt) {
@@ -97,14 +97,14 @@ bool parseOptions(int argc, char** argv, Options& opt) {
                                                        ((g & 0xFCu) << 3) | (b >> 3));
             }
         } else {
-            std::fprintf(stderr, "option inconnue : %s (--help pour l'aide)\n", arg.c_str());
+            std::fprintf(stderr, "unknown option: %s (see --help)\n", arg.c_str());
             return false;
         }
     }
     return true;
 }
 
-/** FNV-1a 64 bits : meme calcul dans tools/iska_clip_check.py. */
+/** FNV-1a 64-bit: same computation in tools/iska_clip_check.py. */
 uint64_t fnv1a(const uint16_t* pixels, size_t count) {
     uint64_t hash = 1469598103934665603ull;
     for (size_t i = 0; i < count; i++) {
@@ -116,7 +116,7 @@ uint64_t fnv1a(const uint16_t* pixels, size_t count) {
     return hash;
 }
 
-/** BMP 24 bits (lignes du bas vers le haut, comme le veut le format). */
+/** 24-bit BMP (rows from the bottom up, as the format requires). */
 bool writeBmp(const char* path, const uint16_t* pixels, int width, int height) {
     const int rowBytes  = width * 3;
     const int padding   = (4 - (rowBytes % 4)) % 4;
@@ -159,7 +159,7 @@ std::vector<uint32_t> dumpTimes(const Iska::Animation& anim, const Options& opt,
     if (opt.keys) {
         for (size_t i = 0; i < anim.keys.size(); i++) {
             times.push_back(anim.keys[i].tMs);
-            if (i + 1 < anim.keys.size()) {   // le milieu, pour voir l'interpolation
+            if (i + 1 < anim.keys.size()) {   // the middle, to see the interpolation
                 times.push_back((anim.keys[i].tMs + anim.keys[i + 1].tMs) / 2);
             }
         }
@@ -176,11 +176,11 @@ std::vector<uint32_t> dumpTimes(const Iska::Animation& anim, const Options& opt,
 int dumpFrames(const Iska::Asset& asset, const Options& opt) {
     Iska::Player player;
     if (!player.bind(&asset)) {
-        std::fprintf(stderr, "asset sans os : rien a dessiner\n");
+        std::fprintf(stderr, "asset without a bone: nothing to draw\n");
         return 1;
     }
     std::error_code ec;
-    std::filesystem::create_directories(opt.dumpDir, ec);   // le dossier peut ne pas exister
+    std::filesystem::create_directories(opt.dumpDir, ec);   // the directory may not exist
     const int width  = player.stageWidth();
     const int height = player.stageHeight();
     std::vector<uint16_t> frame(static_cast<size_t>(width) * height);
@@ -188,8 +188,8 @@ int dumpFrames(const Iska::Asset& asset, const Options& opt) {
     int written = 0;
     for (const Iska::Animation& anim : asset.animations) {
         if (!opt.anim.empty() && opt.anim != "all" && opt.anim != anim.name) continue;
-        // `--at` s'applique a l'animation nommee par --anim, ou a la premiere du
-        // fichier si --anim est absent.
+        // `--at` applies to the animation named by --anim, or to the first one
+        // in the file when --anim is absent.
         std::vector<uint32_t> explicitTimes;
         if (!opt.at.empty() &&
             (opt.anim == anim.name ||
@@ -207,7 +207,7 @@ int dumpFrames(const Iska::Asset& asset, const Options& opt) {
             char path[600];
             std::snprintf(path, sizeof(path), "%s.bmp", stem);
             if (!writeBmp(path, frame.data(), width, height)) {
-                std::fprintf(stderr, "ecriture impossible : %s\n", path);
+                std::fprintf(stderr, "cannot write: %s\n", path);
                 return 1;
             }
             if (opt.raw) {
@@ -229,11 +229,11 @@ int dumpFrames(const Iska::Asset& asset, const Options& opt) {
 }
 
 
-/** Boucle d'affichage : panneau 240x320 sur l'ecran SDL du simulateur. */
+/** Display loop: 240x320 panel on the simulator's SDL screen. */
 int runWindow(const Iska::Asset& asset, const Options& opt) {
     Iska::Player player;
     if (!player.bind(&asset)) {
-        std::fprintf(stderr, "asset sans os : rien a afficher\n");
+        std::fprintf(stderr, "asset without a bone: nothing to display\n");
         return 1;
     }
     std::string idleName = opt.idle;
@@ -244,16 +244,16 @@ int runWindow(const Iska::Asset& asset, const Options& opt) {
         if (idleName.empty()) idleName = asset.animations.front().name;
     }
     if (!asset.find(idleName.c_str())) {
-        std::fprintf(stderr, "animation de fond inconnue : %s\n", idleName.c_str());
+        std::fprintf(stderr, "unknown background animation: %s\n", idleName.c_str());
         return 1;
     }
     const bool hasOneShot = !opt.oneShot.empty() && asset.find(opt.oneShot.c_str()) != nullptr;
 
-    // le panneau est choisi AVANT initLCD (geometrie figee a l'initialisation)
+    // the panel is chosen BEFORE initLCD (the geometry is frozen at init)
     Drivers::setPanelSize(player.stageWidth(), player.stageHeight());
     Drivers::initLCD(0, 0, 0, 0);
     if (!Drivers::tftTouchSubsystemReady()) {
-        std::fprintf(stderr, "ecran indisponible (SDL) : rien a afficher\n");
+        std::fprintf(stderr, "screen unavailable (SDL): nothing to display\n");
         return 1;
     }
 
@@ -264,10 +264,10 @@ int runWindow(const Iska::Asset& asset, const Options& opt) {
     uint32_t autoAccumMs   = 0;
     auto last = std::chrono::steady_clock::now();
 
-    std::printf("[demo] %s — fond=%s%s%s — clic pour jouer %s, ECHAP pour quitter\n",
+    std::printf("[demo] %s -- background=%s%s%s -- click to play %s, ESC to quit\n",
                 opt.iska.c_str(), idleName.c_str(),
                 opt.autoMs ? " (auto " : "", opt.autoMs ? std::to_string(opt.autoMs).c_str() : "",
-                hasOneShot ? opt.oneShot.c_str() : "(aucune)");
+                hasOneShot ? opt.oneShot.c_str() : "(none)");
 
     while (Drivers::pumpEvents()) {
         const auto now = std::chrono::steady_clock::now();
@@ -277,7 +277,7 @@ int runWindow(const Iska::Asset& asset, const Options& opt) {
 
         int16_t  touchX = 0, touchY = 0;
         const bool touching = hasOneShot && Drivers::getIli9341TouchScreenPos(&touchX, &touchY);
-        const bool triggered = (touching && !wasTouching) ||   // front montant du clic
+        const bool triggered = (touching && !wasTouching) ||   // rising edge of the click
                                (opt.autoMs > 0 &&
                                 (autoAccumMs += dtMs) >= opt.autoMs);
         wasTouching = touching;
@@ -288,7 +288,7 @@ int runWindow(const Iska::Asset& asset, const Options& opt) {
         }
 
         if (oneShotActive && player.finished()) {
-            player.play(idleName.c_str(), true);   // retour a la boucle
+            player.play(idleName.c_str(), true);   // back to the loop
             oneShotActive = false;
         }
 
@@ -299,7 +299,7 @@ int runWindow(const Iska::Asset& asset, const Options& opt) {
     return 0;
 }
 
-/** Mesure le cout de rendu pur (aucune ecriture, aucun SDL). */
+/** Measures the pure rendering cost (nothing written, no SDL). */
 int bench(const Iska::Asset& asset, const Options& opt) {
     Iska::Player player;
     if (!player.bind(&asset)) return 1;
@@ -317,7 +317,7 @@ int bench(const Iska::Asset& asset, const Options& opt) {
     const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - start).count();
 
-    std::printf("[bench] %d images %dx%d en %.1f ms => %.2f ms/image "
+    std::printf("[bench] %d images %dx%d in %.1f ms => %.2f ms/image "
                 "(%.0f images/s), %.2f M pixels/s\n",
                 count, player.stageWidth(), player.stageHeight(), elapsed / 1000.0,
                 elapsed / 1000.0 / count,
@@ -335,7 +335,7 @@ int main(int argc, char** argv) {
     Iska::Asset asset;
     std::string error;
     if (!Iska::loadAsset(opt.iska.c_str(), asset, &error)) {
-        std::fprintf(stderr, "chargement impossible (%s) : %s\n", opt.iska.c_str(),
+        std::fprintf(stderr, "cannot load (%s): %s\n", opt.iska.c_str(),
                      error.c_str());
         return 1;
     }

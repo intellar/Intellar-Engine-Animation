@@ -7,22 +7,22 @@
 namespace Iska {
 
 /**
- * Dessine une case sprite RGB565 **tournee autour de son pivot**, en
- * reechantillonnage plus proche voisin. Les pixels magenta (cle de transparence)
- * ne sont jamais ecrits.
+ * Draws an RGB565 sprite box **rotated around its pivot**, with
+ * nearest-neighbour sampling. Magenta pixels (the transparency key) are never
+ * written.
  *
- *   p_ecran = pivot + S^-1 * R(-angle) * (point - articulation)
+ *   p_screen = pivot + S^-1 * R(-angle) * (point - joint)
  *
- * C'est la meme formule que `blit_part` de tools/iska_common.py : les deux
- * implementations sont volontairement identiques pour pouvoir comparer les
- * images du moteur et celles de l'outillage Python au pixel pres.
+ * This is the same formula as `blit_part` in tools/iska_common.py: both
+ * implementations are deliberately identical so the engine frames and the
+ * Python tooling frames can be compared pixel by pixel.
  *
- * @param dst        framebuffer RGB565 (dstW x dstH)
- * @param sprite     pixels de la case (spriteW x spriteH, contigus)
- * @param pivot      pivot dans la case, en pixels (peut sortir de la case)
- * @param joint      position ecran de l'articulation (l'os)
- * @param angleDeg   rotation en degres, horaire a l'ecran
- * @param scaleX/Y   echelle de la part (1 = taille de la case)
+ * @param dst        RGB565 framebuffer (dstW x dstH)
+ * @param sprite     pixels of the box (spriteW x spriteH, contiguous)
+ * @param pivot      pivot inside the box, in pixels (may fall outside the box)
+ * @param joint      screen position of the joint (the bone)
+ * @param angleDeg   rotation in degrees, clockwise on screen
+ * @param scaleX/Y   scale of the part (1 = size of the box)
  */
 void blitPart(uint16_t* dst, int dstW, int dstH,
               const uint16_t* sprite, int spriteW, int spriteH,
@@ -30,7 +30,7 @@ void blitPart(uint16_t* dst, int dstW, int dstH,
               double jointX, double jointY,
               double angleDeg, double scaleX, double scaleY);
 
-/** Remplit un framebuffer RGB565 d'une couleur unie. */
+/** Fills an RGB565 framebuffer with a solid colour. */
 void fill(uint16_t* dst, int width, int height, uint16_t color);
 
 }  // namespace Iska

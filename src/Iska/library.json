@@ -1,0 +1,14 @@
+{
+  "name": "iska",
+  "version": "1.0.0",
+  "description": "ISKA v1 animation runtime: bone hierarchy, key interpolation and RGB565 affine blit. Host agnostic: no Arduino, no SDL, no filesystem -- the host owns the framebuffer, the timing and the panel.",
+  "keywords": "animation, sprite, bone, skeleton, rgb565",
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "srcFilter": [
+      "+<*.cpp>"
+    ]
+  }
+}

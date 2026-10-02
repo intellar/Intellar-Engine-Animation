@@ -1,20 +1,20 @@
-"""Cree (ou remet a jour) l'armature du personnage dans un .blend, sans interface.
+"""Creates (or refreshes) the character's armature in a .blend, headless.
 
     blender -b tools/source/rabbit3.blend --python tools/blender_make_rig.py -- \
         --bones tools/rigs/rabbit3_bones.json \
         --out tools/source/rabbit3_rig.blend
 
-Les plans du personnage ont ete poses a la main dans Blender (« Images as Planes ») ;
-ce script pose par-dessus les **tetes d'os** deduites de ces plans (voir
-`anchor` dans le JSON de graines), relie les os entre eux, puis enregistre une
-copie du .blend. C'est un POINT DE DEPART : l'armature s'ajuste ensuite a la
-souris dans Blender (`rabbit3_rig.blend` est la reference du squelette).
+The character's planes were placed by hand in Blender ("Images as Planes"); this
+script places over them the **bone heads** deduced from those planes (see
+`anchor` in the seed JSON), links the bones together, then saves a copy of the
+.blend. It is a STARTING POINT: the armature is then adjusted with the mouse in
+Blender (`rabbit3_rig.blend` is the reference for the skeleton).
 
-Une fois l'armature ajustee, l'export se fait avec `tools/blender_export.py`
-(qui relit les tetes d'os, pas les graines).
+Once the armature is adjusted, the export is done with `tools/blender_export.py`
+(which reads back the bone heads, not the seeds).
 
-Si une armature du meme nom existe deja, elle est **effacee** puis recreee : le
-script est idempotent (pratique pour repartir des graines).
+If an armature with the same name already exists, it is **deleted** then
+recreated: the script is idempotent (handy to start over from the seeds).
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import json
 import os
 import sys
 
-import bpy                      # noqa: E402  (fourni par Blender)
+import bpy                      # noqa: E402  (provided by Blender)
 from mathutils import Vector     # noqa: E402
 
 
@@ -31,12 +31,43 @@ def argv_after_dashdash() -> list:
     return sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 
 
+# Blender is not always started from the repository (a double click starts it in
+# its own folder), and a script run from a Text block has its folder reported as
+# `<something>.blend/`: the search walks up from the script, then from the .blend
+# that is open, until it finds the root of the repository (`tools/` + `src/`).
+def repo_root() -> str:
+    here = globals().get("__file__") or ""
+    starts = [os.path.dirname(os.path.abspath(here)) if here else "",
+              os.path.dirname(os.path.abspath(bpy.data.filepath))
+              if bpy.data.filepath else "", os.getcwd()]
+    for start in starts:
+        folder = os.path.abspath(start)
+        while True:
+            if (os.path.isdir(os.path.join(folder, "tools"))
+                    and os.path.isdir(os.path.join(folder, "src"))):
+                return folder
+            parent = os.path.dirname(folder)
+            if parent == folder:                # top of the drive: nothing found
+                break
+            folder = parent
+    return os.getcwd()
+
+
+ROOT = repo_root()
+
+
+def resolve(path: str) -> str:
+    """A relative path is read from the root of the repository (as in the README);
+    an absolute path is kept as it is."""
+    return path if os.path.isabs(path) else os.path.join(ROOT, path)
+
+
 def norm(name: str) -> str:
     return "".join(ch for ch in name.lower() if ch.isalnum())
 
 
 def meshes_by_name() -> dict:
-    """Plans utilisables comme parts : mesh avec une image dans ses materiaux."""
+    """Planes usable as parts: mesh with an image in its materials."""
     found = {}
     for obj in bpy.data.objects:
         if obj.type != "MESH":
@@ -47,11 +78,11 @@ def meshes_by_name() -> dict:
 
 
 def local_rect(obj):
-    """Rectangle local du plan : lu dans le mesh (pas via `obj.bound_box`, dont le
-    cache n'est pas fiable ici : il renvoie des valeurs aberrantes selon l'ordre
-    des lectures, meme en mode objet)."""
+    """Local rectangle of the plane: read from the mesh (not through `obj.bound_box`,
+    whose cache is not reliable here: it returns wild values depending on the order
+    of the reads, even in object mode)."""
     verts = [v.co for v in obj.data.vertices]
-    if not verts:                       # mesh sans sommet : repli sur le cache
+    if not verts:                       # mesh without any vertex: fall back on the cache
         verts = [Vector(c) for c in obj.bound_box]
     return (min(v.x for v in verts), min(v.y for v in verts),
             max(v.x for v in verts), max(v.y for v in verts))
@@ -70,26 +101,27 @@ def main() -> None:
     ap.add_argument("--out", default="tools/source/rabbit3_rig.blend")
     args = ap.parse_args(argv_after_dashdash())
 
-    with open(args.bones, encoding="utf-8") as fh:
+    with open(resolve(args.bones), encoding="utf-8") as fh:
         seeds = json.load(fh)
 
     parts = meshes_by_name()
     length = float(seeds.get("bone_length", 0.35))
     arm_name = seeds.get("armature", "skeleton")
 
-    # Idempotence : on repart d'une armature neuve.
+    # Idempotence: start over from a brand-new armature.
     old = bpy.data.objects.get(arm_name)
     if old is not None:
         bpy.data.objects.remove(old, do_unlink=True)
 
-    # Mesures AVANT d'entrer en mode edit : Blender ne reevalue pas la boite des
-    # autres objets pendant l'edition d'un objet (bound_box y est vide/aberrant).
+    # Measurements BEFORE entering edit mode: Blender does not re-evaluate the box
+    # of the other objects while an object is being edited (bound_box is empty or
+    # wild there).
     heads = {}
     tails = {}
     for seed in seeds["bones"]:
         part = parts.get(seed["part"]) or parts.get(norm(seed["part"]))
         if part is None:
-            print(f"[make_rig] plan introuvable pour l'os {seed['name']} ({seed['part']})")
+            print(f"[make_rig] no plane found for bone {seed['name']} ({seed['part']})")
             continue
         head = anchor_world(part, seed["anchor"])
         direction = Vector((seed["dir"][0], seed["dir"][1], 0.0))
@@ -119,17 +151,17 @@ def main() -> None:
             continue
         parent = made.get(seed["parent"])
         if parent is None:
-            print(f"[make_rig] parent inconnu pour {seed['name']} : {seed['parent']}")
+            print(f"[make_rig] unknown parent for {seed['name']}: {seed['parent']}")
             continue
         bone.parent = parent
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    out_path = os.path.abspath(args.out)
+    out_path = os.path.abspath(resolve(args.out))
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=out_path)
-    print(f"[make_rig] {len(made)} os -> {out_path}")
-    # NB : on imprime `heads` (releve avant l'edition) et non les `edit_bones` :
-    # apres le retour en mode objet, ces handles pointent sur de la memoire liberee.
+    print(f"[make_rig] {len(made)} bones -> {out_path}")
+    # NB: `heads` is printed (measured before the edit) and not the `edit_bones`:
+    # after switching back to object mode, those handles point to freed memory.
     for seed in seeds["bones"]:
         head = heads.get(seed["name"])
         if head is not None:

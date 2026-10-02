@@ -138,14 +138,14 @@ std::vector<BoneWorld> Player::resolveBones(const Asset& asset,
         const BoneWorld& parent = world[bone.parent];
         const double     ux     = lx * parent.sx;
         const double     uy     = ly * parent.sy;
-        // math.radians(x) cote Python == x * (pi / 180) : meme ordre d'operations
+        // Python's `math.radians(x)` == x * (pi / 180): same order of operations
         const double     rad    = parent.angle * kDegToRad;
         const double     cosA   = std::cos(rad);
         const double     sinA   = std::sin(rad);
         out.x     = parent.x + (ux * cosA - uy * sinA);
         out.y     = parent.y + (ux * sinA + uy * cosA);
         out.angle = parent.angle + angle;
-        // l'echelle n'est PAS heritee : elle ne s'applique qu'a la part de l'os
+        // the scale is NOT inherited: it only affects the part drawn by this bone
         out.sx    = local.sx;
         out.sy    = local.sy;
     }

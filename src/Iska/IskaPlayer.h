@@ -7,69 +7,69 @@
 
 namespace Iska {
 
-/** Deltas d'un os a un instant donne (en unites du format).
+/** Per-bone deltas at a given time (in format units).
 
- *  Les calculs de pose sont en `double` (et non en `float`) : c'est ce qui
- *  garantit que `tools/iska_common.py` (Python) et le moteur produisent la meme
- *  image au pixel pres -- en `float`, un arrondi de derniere decimale suffit a
- *  faire tomber un echantillon voisin plus proche sur un autre texel.
+ *  Pose maths uses `double` (not `float`): that is what guarantees that
+ *  `tools/iska_common.py` (Python) and the runtime produce the same image down
+ *  to the pixel -- with `float`, a single last-digit rounding error is enough
+ *  to make a nearest-neighbour sample land on a different texel.
  */
 struct BonePose {
     double dx = 0.0, dy = 0.0, rot = 0.0, sx = 1.0, sy = 1.0;
 };
 
-/** Os resolu en coordonnees ecran. */
+/** Bone resolved into screen coordinates. */
 struct BoneWorld {
     double x = 0.0, y = 0.0, angle = 0.0, sx = 1.0, sy = 1.0;
 };
 
 /**
- * Lecteur d'animations ISKA : avance le temps, echantillonne les cles, resout
- * la hierarchie et dessine les parts dans un framebuffer RGB565.
+ * ISKA animation player: advances the clock, samples the keys, resolves the
+ * hierarchy and draws the parts into an RGB565 framebuffer.
  *
- * Le `Player` ne possede pas l'`Asset` : il garde un pointeur, l'asset doit donc
- * vivre plus longtemps que le lecteur (c'est le cas dans la demo).
+ * The `Player` does not own the `Asset`: it keeps a pointer, so the asset must
+ * outlive the player (which is the case in the demo).
  */
 class Player {
 public:
-    /** Associe un asset et se place sur la premiere animation (sans la jouer). */
+    /** Binds an asset and selects the first animation (without playing it). */
     bool bind(const Asset* asset);
 
-    /** Joue une animation par son nom. `restart` remet le temps a zero meme si
-     *  l'animation est deja celle qui joue. */
+    /** Plays an animation by name. `restart` resets the time even when that
+     *  animation is already the one being played. */
     bool play(const char* name, bool restart = false);
     bool playIndex(size_t index, bool restart = false);
 
-    /** Avance l'horloge. Le temps est borne (ou boucle) selon l'animation. */
+    /** Advances the clock. Time is clamped (or wrapped) by the animation. */
     void update(uint32_t deltaMs);
 
-    /** Place l'horloge a un instant precis (utile pour la capture d'images). */
+    /** Sets the clock to an exact time (handy for frame capture). */
     void setTime(uint32_t tMs);
 
-    /** Efface puis dessine la pose courante (framebuffer de stageW*stageH). */
+    /** Clears then draws the current pose (stageW*stageH framebuffer). */
     void render(uint16_t* buffer, uint16_t background = 0x0000) const;
 
-    /** Dessine la pose courante sans effacer (pour composer avec un decor). */
+    /** Draws the current pose without clearing (to compose over a backdrop). */
     void draw(uint16_t* buffer) const;
 
     const Animation* animation() const { return animation_; }
     const char*      animationName() const { return animation_ ? animation_->name.c_str() : ""; }
     uint32_t         timeMs() const { return timeMs_; }
-    /** Vrai quand une animation one-shot est arrivee au bout. */
+    /** True once a one-shot animation has reached its end. */
     bool             finished() const;
     bool             looping() const { return animation_ && animation_->loop; }
 
     int stageWidth() const { return asset_ ? asset_->stageW : 0; }
     int stageHeight() const { return asset_ ? asset_->stageH : 0; }
 
-    /** Poses echantillonnees de la derniere mise a jour (lecture/debug). */
+    /** Sampled poses from the last update (read-only / debugging). */
     const std::vector<BonePose>& pose() const { return pose_; }
-    /** Positions ecran des os de la derniere mise a jour (lecture/debug). */
+    /** Screen positions of the bones from the last update (read-only / debugging). */
     const std::vector<BoneWorld>& world() const { return world_; }
 
-    /** Echantillonne les cles d'une animation sans toucher a la lecture en cours. */
+    /** Samples the keys of an animation without touching the current playback. */
     static std::vector<BonePose> samplePose(const Animation& anim, uint32_t tMs, size_t boneCount);
-    /** Resout la hierarchie : positions, angles et echelles ecran. */
+    /** Resolves the hierarchy: screen positions, angles and scales. */
     static std::vector<BoneWorld> resolveBones(const Asset& asset,
                                                const std::vector<BonePose>& pose);
 

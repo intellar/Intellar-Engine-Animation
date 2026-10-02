@@ -6,17 +6,17 @@
 
 #include "IskaFormat.h"
 
-/** Chargement et validation d'un fichier `.iska` (voir IskaFormat.h). */
+/** Loading and validation of an `.iska` file (see IskaFormat.h). */
 namespace Iska {
 
-/** Charge un .iska depuis un fichier. `error` recoit le motif en cas d'echec. */
+/** Loads an .iska from a file. `error` receives the reason when it fails. */
 bool loadAsset(const char* path, Asset& out, std::string* error = nullptr);
 
-/** Charge un .iska depuis un tampon memoire (utile pour les assets embarques). */
+/** Loads an .iska from a memory buffer (handy for embedded assets). */
 bool parseAsset(const uint8_t* data, size_t size, Asset& out,
                 std::string* error = nullptr);
 
-/** Resume lisible d'un asset (une ligne pour les os, une par animation). */
+/** Readable summary of an asset (one line for the bones, one per animation). */
 std::string describe(const Asset& asset);
 
 }  // namespace Iska

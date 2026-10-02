@@ -1,20 +1,20 @@
-"""Empaquette un rig + des animations en `.iska`, le fichier lu par le moteur.
+"""Packs a rig + animations into `.iska`, the file read by the runtime.
 
     python tools/iska_pack.py --rig tools/rigs/rabbit3.json \
         --anims tools/animations/rabbit3.json --out assets/rabbit3.iska
 
-C'est l'etape qui transforme les PNG et les poses ecrites a la main en un binaire
-autonome, sans dependance a Blender ni a Pillow cote moteur :
+This is the step that turns the PNGs and the hand-written poses into a
+self-contained binary, with no Blender or Pillow dependency on the runtime side:
 
-  * chaque PNG est mis a l'echelle de sa case sprite (`rig.parts[].sprite`),
-    converti en RGB565, et les pixels translucides deviennent **magenta**
-    (cle de transparence du format) ;
-  * les cases sont concatenees dans un seul bloc de pixels (offset en octets) ;
-  * les poses nommees du JSON d'animations (`{"armL": {"rot": -30}}`) sont
-    completees en poses plein format (un quintuplet par os, dans l'ordre du rig)
-    et validees : nom d'os inconnu, cles non croissantes, duree incoherente...
+  * every PNG is scaled to its sprite box (`rig.parts[].sprite`), converted to
+    RGB565, and the translucent pixels become **magenta** (the transparency key
+    of the format);
+  * the boxes are concatenated into a single pixel block (offsets in bytes);
+  * the named poses of the animation JSON (`{"armL": {"rot": -30}}`) are expanded
+    into full poses (one 5-tuple per bone, in rig order) and validated: unknown
+    bone name, non-ascending keys, inconsistent duration...
 
-`--check` valide tout sans rien ecrire (utile en pre-commit / CI).
+`--check` validates everything without writing anything (handy in pre-commit/CI).
 """
 from __future__ import annotations
 
@@ -34,36 +34,36 @@ def load_json(path: str) -> dict:
 
 
 def check_anim(skeleton: iska.Skeleton, name: str, anim: dict) -> list:
-    """Valide une animation et renvoie ses cles en poses plein format.
+    """Validates an animation and returns its keys as full poses.
 
-    **Une cle ne decrit que ce qui bouge** : un os absent d'une cle conserve la
-    valeur de la cle precedente (comme un canal d'animation sparse), et citer un
-    os sans preciser une composante remet cette composante au repos. Pour
-    renvoyer un os au repos, on l'ecrit donc explicitement (`"armL": {}`).
+    **A key only describes what moves**: a bone missing from a key keeps the
+    value of the previous key (like a sparse animation channel), and naming a
+    bone without giving a component resets that component to rest. To send a bone
+    back to rest, write it explicitly (`"armL": {}`).
     """
     if "keys" not in anim or len(anim["keys"]) < 2:
-        raise SystemExit(f"{name} : au moins deux cles sont necessaires")
+        raise SystemExit(f"{name}: at least two keys are required")
     last_t = None
     for key in anim["keys"]:
         t = int(round(key["t"]))
         if last_t is not None and t <= last_t:
-            raise SystemExit(f"{name} : les temps de cle doivent etre croissants "
-                             f"({last_t} puis {t})")
+            raise SystemExit(f"{name}: key times must increase "
+                             f"({last_t} then {t})")
         last_t = t
     try:
         keys = iska.carry_keys(skeleton, anim["keys"])
     except KeyError as exc:
-        raise SystemExit(f"{name} : {exc.args[0]}") from None
+        raise SystemExit(f"{name}: {exc.args[0]}") from None
     duration = int(round(anim.get("duration", last_t)))
     if duration < last_t:
-        raise SystemExit(f"{name} : duree {duration} ms inferieure a la derniere cle {last_t}")
+        raise SystemExit(f"{name}: duration {duration} ms is below the last key {last_t}")
     if anim.get("loop") and keys[0][0] != 0:
-        raise SystemExit(f"{name} : une animation en boucle doit commencer a t=0")
+        raise SystemExit(f"{name}: a looping animation must start at t=0")
     return keys, duration
 
 
 def build_sprites(rig: dict, base_dir: str, alpha_threshold: int):
-    """Bloc pixels (array('H')) + records de parts, dans l'ordre de dessin."""
+    """Pixel block (array('H')) + part records, in draw order."""
     parts = sorted(rig["parts"], key=lambda p: p["draw_order"])
     bone_index = {b["name"]: i for i, b in enumerate(rig["bones"])}
     pixels = array.array("H")
@@ -72,7 +72,7 @@ def build_sprites(rig: dict, base_dir: str, alpha_threshold: int):
     for part in parts:
         path = os.path.join(base_dir, part["image"])
         if not os.path.exists(path):
-            raise SystemExit(f"PNG introuvable : {path}")
+            raise SystemExit(f"PNG not found: {path}")
         with Image.open(path) as img:
             sw, sh = part["sprite"]
             sprite = iska.image_to_sprite(img, (sw, sh), alpha_threshold)
@@ -93,13 +93,13 @@ def build_sprites(rig: dict, base_dir: str, alpha_threshold: int):
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--rig", required=True, help="JSON de rig (tools/rig_build.py)")
-    ap.add_argument("--anims", required=True, help="JSON d'animations")
-    ap.add_argument("--out", required=True, help="fichier .iska a ecrire")
+    ap.add_argument("--rig", required=True, help="rig JSON (tools/rig_build.py)")
+    ap.add_argument("--anims", required=True, help="animations JSON")
+    ap.add_argument("--out", required=True, help=".iska file to write")
     ap.add_argument("--alpha-threshold", type=int, default=128,
-                    help="alpha en dessous duquel le pixel devient transparent (magenta)")
+                    help="alpha below which a pixel becomes transparent (magenta)")
     ap.add_argument("--check", action="store_true",
-                    help="valider sans ecrire le .iska")
+                    help="validate without writing the .iska")
     args = ap.parse_args()
 
     rig = load_json(args.rig)
@@ -107,12 +107,12 @@ def main() -> None:
     skeleton = iska.Skeleton(rig)
 
     if not skeleton.bones:
-        raise SystemExit("rig sans os")
+        raise SystemExit("rig without any bone")
     for i, bone in enumerate(skeleton.bones):
         parent = bone["parent"]
         if parent is not None and skeleton.index[parent] >= i:
-            raise SystemExit(f"rig : l'os {bone['name']} doit venir apres son parent "
-                             "(invariant du format ISKA)")
+            raise SystemExit(f"rig: bone {bone['name']} must come after its parent "
+                             "(ISKA format invariant)")
 
     animations = []
     for name, anim in anims_doc["animations"].items():
@@ -130,17 +130,17 @@ def main() -> None:
     blob = iska.build_iska(rig["stage"]["w"], rig["stage"]["h"], bones, records,
                            animations, pixels)
 
-    print(f"[iska_pack] {len(bones)} os, {len(records)} parts, "
+    print(f"[iska_pack] {len(bones)} bones, {len(records)} parts, "
           f"{len(animations)} animations")
     for name, sw, sh, byte_count in report:
-        print(f"[iska_pack]   part {name:6s} {sw:3d}x{sh:<3d} {byte_count:6d} o")
+        print(f"[iska_pack]   part {name:6s} {sw:3d}x{sh:<3d} {byte_count:6d} B")
     for anim in animations:
-        print(f"[iska_pack]   anim {anim['name']:10s} duree={anim['duration_ms']:5d} ms "
-              f"boucle={str(anim['loop']):5s} cles={len(anim['keys'])}")
-    print(f"[iska_pack] bloc pixels : {len(pixels) * 2} o, fichier : {len(blob)} o")
+        print(f"[iska_pack]   anim {anim['name']:10s} duration={anim['duration_ms']:5d} ms "
+              f"loop={str(anim['loop']):5s} keys={len(anim['keys'])}")
+    print(f"[iska_pack] pixel block: {len(pixels) * 2} B, file: {len(blob)} B")
 
     if args.check:
-        print("[iska_pack] --check : rien ecrit (validation OK)")
+        print("[iska_pack] --check: nothing written (validation OK)")
         return
 
     out_path = os.path.abspath(args.out)
@@ -149,16 +149,15 @@ def main() -> None:
         fh.write(blob)
     print(f"[iska_pack] -> {out_path}")
 
-    # relecture de controle : le fichier doit se relire a l'identique
+    # read-back check: the file must read back identically
     check = iska.parse_iska(blob)
     assert check["stage"] == [rig["stage"]["w"], rig["stage"]["h"]]
     assert len(check["parts"]) == len(records)
     assert set(check["anims"]) == {a["name"] for a in animations}
     for anim in animations:
         assert len(check["anims"][anim["name"]]["keys"]) == len(anim["keys"])
-    print("[iska_pack] relecture du binaire : OK")
+    print("[iska_pack] binary read-back: OK")
 
 
 if __name__ == "__main__":
     main()
-

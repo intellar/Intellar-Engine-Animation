@@ -1,12 +1,12 @@
 {
   "_comment": [
-    "Graines du squelette de rabbit3 : utilise par tools/blender_make_rig.py pour",
-    "creer l'armature dans le .blend, puis par tools/blender_export.py pour relire.",
-    "Une fois l'armature posee dans Blender, c'est le .blend qui fait foi : ce",
-    "fichier ne sert plus qu'a regenerer une armature de depart.",
-    "anchor = fraction de la boite locale du plan : x 0=gauche 1=droite, y 0=bas 1=haut",
-    "(une valeur hors [0,1] est permise : -0.05 = 5% sous la boite).",
-    "dir = direction de l'os dans Blender (y vers le haut) -- sert aux angles d'os."
+    "Seeds of the rabbit3 skeleton: used by tools/blender_make_rig.py to",
+    "create the armature in the .blend, then read back by tools/blender_export.py.",
+    "Once the armature is placed in Blender, the .blend is the reference: this",
+    "file is only used to regenerate a starting armature.",
+    "anchor = fraction of the plane's local box: x 0=left 1=right, y 0=bottom 1=top",
+    "(a value outside [0,1] is allowed: -0.05 = 5% below the box).",
+    "dir = bone direction in Blender (y upwards) -- used for bone angles."
   ],
   "armature": "skeleton",
   "bone_length": 0.35,

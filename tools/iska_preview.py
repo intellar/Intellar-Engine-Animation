@@ -1,4 +1,4 @@
-"""Rend des images d'une animation .iska (sans Blender, sans SDL).
+"""Renders frames of an .iska animation (no Blender, no SDL).
 
     python tools/iska_preview.py assets/rabbit3.iska --anim idle_loop \
         --frames 8 --out build/rabbit3/preview_idle.png
@@ -6,12 +6,12 @@
         --at 0,240,330,520,900,1400,1880,2060,2380,2700 \
         --out build/rabbit3/preview_peek.png --scale 1
 
-Le rendu utilise exactement le meme blitter que le runtime C++
-(`iska_common.blit_part`), et lit le binaire : ce que vous voyez ici est ce que
-le moteur affichera (aux differences d'arrondi de RGB565 pres, qui n'existent pas
-puisque l'asset est deja en RGB565).
+The render uses exactly the same blitter as the C++ runtime
+(`iska_common.blit_part`) and reads the binary: what you see here is what the
+runtime will display (modulo RGB565 rounding differences, which do not exist
+since the asset is already RGB565).
 
-`--frames N` repartit N images sur la duree ; `--at` impose les instants (ms).
+`--frames N` spreads N frames over the duration; `--at` sets the times (ms).
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import iska_common as iska
 
 
 def render(data: dict, name: str, t_ms: float):
-    """Framebuffer RGB565 de l'animation `name` a l'instant `t_ms`."""
+    """RGB565 framebuffer of animation `name` at time `t_ms`."""
     anim = data["anims"][name]
     skeleton = iska.skeleton_from_iska(data)
     buf = iska.new_frame(data["stage"][0], data["stage"][1], iska.rgb_to_565(16, 17, 22))
@@ -46,21 +46,21 @@ def to_image(buf, width: int, height: int) -> Image.Image:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("iska")
-    ap.add_argument("--anim", default=None, help="animation a rendre (defaut : la premiere)")
-    ap.add_argument("--frames", type=int, default=8, help="nombre d'images reparties")
-    ap.add_argument("--at", default=None, help="instants en ms separes par des virgules")
-    ap.add_argument("--out", required=True, help="PNG de sortie (planche contact)")
+    ap.add_argument("--anim", default=None, help="animation to render (default: the first)")
+    ap.add_argument("--frames", type=int, default=8, help="number of frames, spread over the duration")
+    ap.add_argument("--at", default=None, help="times in ms, comma-separated")
+    ap.add_argument("--out", required=True, help="output PNG (contact sheet)")
     ap.add_argument("--scale", type=int, default=1)
-    ap.add_argument("--columns", type=int, default=0, help="colonnes (0 = automatique)")
-    ap.add_argument("--dump-dir", default=None, help="ecrire aussi chaque image")
+    ap.add_argument("--columns", type=int, default=0, help="columns (0 = automatic)")
+    ap.add_argument("--dump-dir", default=None, help="also write every single frame")
     args = ap.parse_args()
 
     with open(args.iska, "rb") as fh:
         data = iska.parse_iska(fh.read())
     name = args.anim or next(iter(data["anims"]))
     if name not in data["anims"]:
-        raise SystemExit(f"animation inconnue : {name} "
-                         f"(disponibles : {', '.join(data['anims'])})")
+        raise SystemExit(f"unknown animation: {name} "
+                         f"(available: {', '.join(data['anims'])})")
     anim = data["anims"][name]
 
     if args.at:
@@ -93,9 +93,9 @@ def main() -> None:
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     sheet.save(args.out)
-    print(f"[preview] {len(times)} images de {name} -> {args.out} "
+    print(f"[preview] {len(times)} frames of {name} -> {args.out} "
           f"({sheet.size[0]}x{sheet.size[1]})")
-    print(f"[preview] instants : {', '.join(f'{t:.0f}' for t in times)} ms")
+    print(f"[preview] times: {', '.join(f'{t:.0f}' for t in times)} ms")
 
 
 if __name__ == "__main__":

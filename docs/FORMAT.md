@@ -1,185 +1,183 @@
-# Format ISKA v1
+# ISKA format v1
 
-Un `.iska` est un fichier **autonome** : squelette, boîtes de sprites RGB565 et
-animations. Le moteur n'a besoin que de ce fichier pour animer un personnage —
-ni Blender, ni PNG, ni parseur JSON.
+An `.iska` file is **self-contained**: skeleton, RGB565 sprite boxes and
+animations. The engine needs nothing else to animate a character -- no Blender,
+no PNG, no JSON parser.
 
-Deux implémentations existent, volontairement identiques :
+Two implementations exist, deliberately identical:
 
-* `src/Iska/` — C++17, aucune dépendance (l'écran SDL est optionnel) ;
-* `tools/iska_common.py` — Python, utilisé par le packer et les outils de
-  vérification. `tools/iska_clip_check.py` compare les deux rendus **au pixel
-  près** (94 images identiques sur les deux animations de `rabbit3`).
+* `src/Iska/` -- C++17, no dependency (the SDL screen is optional);
+* `tools/iska_common.py` -- Python, used by the packer and the checking tools.
+  `tools/iska_clip_check.py` compares the two renders **pixel for pixel**
+  (94 identical frames over the two animations of `rabbit3`).
 
 ## Conventions
 
-* **Petit-boutiste** partout, champs non signés sauf mention `i`.
-* Coordonnées en **pixels écran** : X vers la droite, Y vers le **bas**.
-* Angles en **dixièmes de degré**, **positif = horaire** à l'écran, `0` = sprite
-  non tourné.
-* Un pixel **magenta** (`RGB565 = 0xF81F`) est la **clé de transparence** : il
-  n'est jamais écrit. Le packer transforme les pixels d'alpha < `--alpha-threshold`
-  (128 par défaut) en magenta.
+* **Little-endian** everywhere, unsigned fields unless marked `i`.
+* Coordinates in **screen pixels**: X to the right, Y **downwards**.
+* Angles in **tenths of a degree**, **positive = clockwise** on screen, `0` =
+  sprite not rotated.
+* A **magenta** pixel (`RGB565 = 0xF81F`) is the **transparency key**: it is never
+  written. The packer turns pixels with alpha < `--alpha-threshold` (128 by
+  default) into magenta.
 
-## En-tête (32 octets)
+## Header (32 bytes)
 
-| Octet | Type | Champ |
+| Byte | Type | Field |
 | ---: | :--- | :--- |
 | 0 | `char[4]` | `"ISKA"` |
 | 4 | `u16` | version (1) |
-| 6 | `u16` | taille de l'en-tête (32) |
-| 8 | `u16` | `stageW` (ex. 240) |
-| 10 | `u16` | `stageH` (ex. 320) |
-| 12 | `u16` | nombre d'os |
-| 14 | `u16` | nombre de parts |
-| 16 | `u16` | nombre d'animations |
-| 18 | `u16` | réservé (0) |
-| 20 | `u32` | taille du bloc de pixels, en octets |
-| 24 | `u32` | nombre de pixels RGB565 |
-| 28 | `u32` | CRC32 (IEEE, celui de zlib) du bloc de pixels |
+| 6 | `u16` | header size (32) |
+| 8 | `u16` | `stageW` (e.g. 240) |
+| 10 | `u16` | `stageH` (e.g. 320) |
+| 12 | `u16` | bone count |
+| 14 | `u16` | part count |
+| 16 | `u16` | animation count |
+| 18 | `u16` | reserved (0) |
+| 20 | `u32` | pixel block size, in bytes |
+| 24 | `u32` | RGB565 pixel count |
+| 28 | `u32` | CRC32 (IEEE, the one from zlib) of the pixel block |
 
-Le CRC permet de détecter un asset tronqué ou édité à la main : le chargeur
-refuse le fichier si l'empreinte ne correspond pas.
+The CRC makes it possible to detect a truncated or hand-edited asset: the loader
+rejects the file when the fingerprint does not match.
 
-## Os — 12 octets par os
+## Bones -- 12 bytes per bone
 
-| Offset | Type | Champ |
+| Offset | Type | Field |
 | ---: | :--- | :--- |
-| 0 | `i16` | index du parent (`-1` = racine) |
-| 2 | `i16` | `restX` relatif **à la tête du parent** |
+| 0 | `i16` | parent index (`-1` = root) |
+| 2 | `i16` | `restX` relative **to the parent's head** |
 | 4 | `i16` | `restY` |
-| 6 | `i16` | angle de repos (dixièmes de degré) |
-| 8 | `u32` | réservé |
+| 6 | `i16` | rest angle (tenths of a degree) |
+| 8 | `u32` | reserved |
 
-**Invariant** : un os ne peut référencer qu'un parent d'index **strictement
-inférieur**. Le moteur résout donc la hiérarchie en une seule passe, et le packer
-refuse un rig qui ne respecte pas cet ordre.
+**Invariant**: a bone may only reference a parent with a **strictly smaller**
+index. The engine therefore resolves the hierarchy in a single pass, and the
+packer refuses a rig that does not follow that order.
 
-`rest` est relatif à la tête du parent (et non à sa queue) : chaque os est un
-**pivot**, et un enfant suit le pivot de son parent.
+`rest` is relative to the parent's head (not its tail): every bone is a
+**pivot**, and a child follows its parent's pivot.
 
-## Parts — 26 octets par part
+## Parts -- 26 bytes per part
 
-| Offset | Type | Champ |
+| Offset | Type | Field |
 | ---: | :--- | :--- |
-| 0 | `i16` | os qui porte la part (`-1` = aucun) |
-| 2 | `i16` | `pivotX` dans la case sprite |
+| 0 | `i16` | bone carrying the part (`-1` = none) |
+| 2 | `i16` | `pivotX` in the sprite box |
 | 4 | `i16` | `pivotY` |
 | 6 | `u16` | `spriteW` |
 | 8 | `u16` | `spriteH` |
-| 10 | `u16` | ordre de dessin (croissant : 0 = derrière) |
-| 12 | `u16` | drapeaux (réservé, 0) |
-| 14 | `u16` | réservé |
-| 16 | `u16` | réservé |
-| 18 | `u32` | `pixelOffset` (octet du coin haut-gauche dans le bloc) |
-| 22 | `u32` | `pixelBytes` (taille de la case) |
+| 10 | `u16` | draw order (increasing: 0 = behind) |
+| 12 | `u16` | flags (reserved, 0) |
+| 14 | `u16` | reserved |
+| 16 | `u16` | reserved |
+| 18 | `u32` | `pixelOffset` (byte of the top-left corner in the block) |
+| 22 | `u32` | `pixelBytes` (size of the box) |
 
-Les cases sont stockées **contiguës** (lignes qui se suivent, largeur =
-`spriteW`) : le moteur n'a pas de calcul de stride à faire, il pointe
-directement dans le bloc. Les parts sont écrites dans l'ordre de dessin, du fond
-vers l'avant.
+The boxes are stored **contiguously** (rows follow each other, width =
+`spriteW`): the engine has no stride to compute, it points straight into the
+block. Parts are written in draw order, from the back to the front.
 
 ## Animations
 
-Chaque animation commence par :
+Each animation starts with:
 
-| Type | Champ |
+| Type | Field |
 | :--- | :--- |
-| `u16` | longueur du nom (octets) |
-| `char[]` | nom en UTF-8, sans zéro terminal |
-| `u16` | drapeaux : bit 0 = **boucle** |
-| `u16` | nombre de clés |
-| `u32` | durée en millisecondes |
+| `u16` | name length (bytes) |
+| `char[]` | name in UTF-8, without terminating zero |
+| `u16` | flags: bit 0 = **loop** |
+| `u16` | key count |
+| `u32` | duration in milliseconds |
 
-Puis, pour chaque clé :
+Then, for each key:
 
-| Type | Champ |
+| Type | Field |
 | :--- | :--- |
-| `u16` | `tMs` (croissant) |
-| `i16 × 5` | pose de l'os 0 : `dx, dy, rot, sx, sy` |
-| … | … une pose par os, dans l'ordre du squelette |
+| `u16` | `tMs` (increasing) |
+| `i16 x 5` | pose of bone 0: `dx, dy, rot, sx, sy` |
+| ... | ... one pose per bone, in skeleton order |
 
-Chaque clé porte **toutes** les poses (pas de compression) : le moteur cherche
-l'intervalle `[k0, k1]` et interpole linéairement les cinq composantes —
-`dx`/`dy` en pixels, `rot` en dixièmes de degré, `sx`/`sy` en 1/10000
-(`10000` = ×1). Lecture d'une clé : `O(nb os)` par image, sans allocation.
+Every key carries **all** the poses (no compression): the engine looks for the
+interval `[k0, k1]` and interpolates the five components linearly --
+`dx`/`dy` in pixels, `rot` in tenths of a degree, `sx`/`sy` in 1/10000
+(`10000` = x1). Reading a key: `O(nb bones)` per frame, no allocation.
 
-Règles de lecture :
+Playback rules:
 
-* animation **en boucle** : `t = temps_ecoule mod duree`, et `t = duree` doit
-  redonner exactement la pose de `t = 0` (vérifié par `iska_clip_check.py`) ;
-* animation **one-shot** : au-delà de la durée, la dernière pose est tenue ;
-  l'hôte peut tester `Player::finished()` pour enchaîner.
+* **looping** animation: `t = elapsed_time mod duration`, and `t = duration` must
+  give back exactly the pose of `t = 0` (checked by `iska_clip_check.py`);
+* **one-shot** animation: past the duration, the last pose is held; the host can
+  test `Player::finished()` to chain the next one.
 
-## Poses et transformations
+## Poses and transformations
 
-Une pose donnée par l'hôte est un **delta par rapport au repos** du rig :
+A pose given by the host is a **delta relative to the rest** of the rig:
 
 ```
-local_x = restX + dx        local_angle = angle_repos + rot
+local_x = restX + dx        local_angle = rest_angle + rot
 local_y = restY + dy        local_scale = (sx, sy)
 ```
 
-Résolution de la hiérarchie, pour chaque os (parents d'abord) :
+Hierarchy resolution, for each bone (parents first):
 
 ```
-position(os) = position(parent) + R(angle(parent)) · (echelle(parent) ⊙ (local_x, local_y))
-angle(os)    = angle(parent) + local_angle
-echelle(os)  = local_scale                      <- NON héritée
+position(bone) = position(parent) + R(angle(parent)) . (scale(parent) * (local_x, local_y))
+angle(bone)    = angle(parent) + local_angle
+scale(bone)    = local_scale                        <- NOT inherited
 ```
 
-L'échelle **n'est pas héritée** : réduire le torse ne déforme pas la tête, il la
-fait seulement descendre (utile pour un *squash and stretch*), et une échelle
-n'affecte que la part dessinée par l'os qui la porte. C'est un choix assumé —
-les deux implémentations font exactement pareil.
+The scale is **not inherited**: shrinking the torso does not deform the head, it
+only makes it go down (useful for *squash and stretch*), and a scale only affects
+the part drawn by the bone carrying it. A deliberate choice -- both
+implementations do exactly the same.
 
-Dessin d'une part (`P` = pivot dans la case, `J` = articulation de son os) :
+Drawing a part (`P` = pivot in the box, `J` = joint of its bone):
 
 ```
-avant   : dst = J + R(angle) · (S · (p - P))
-arrière : p   = P + S⁻¹ · R(-angle) · (dst - J)      <- ce que fait le blitter
+forward : dst = J + R(angle) . (S . (p - P))
+inverse : p   = P + S^-1 . R(-angle) . (dst - J)      <- what the blitter does
 ```
 
-Le blitter parcourt la boîte englobante des quatre coins tournés, applique la
-formule arrière pour chaque centre de pixel, et échantillonne **le plus proche
-voisin**. Un pixel magenta n'est jamais écrit, donc les bords restent nets (pas
-de mélange) — c'est ce qu'on veut en pixel art sur un écran RGB565.
+The blitter walks the bounding box of the four rotated corners, applies the
+inverse formula for every pixel centre, and samples **nearest neighbour**. A
+magenta pixel is never written, so the edges stay sharp (no blending) -- which is
+what we want for pixel art on an RGB565 screen.
 
-## Écriture des animations (JSON → binaire)
+## Writing animations (JSON -> binary)
 
-Les animations s'écrivent en JSON (`tools/animations/*.json`) puis sont
-empaquetées. Deux règles rendent l'écriture manuelle supportable :
+Animations are written in JSON (`tools/animations/*.json`) then packed. Two rules
+make hand-writing bearable:
 
-1. **Os absent d'une clé = valeur de la clé précédente** (« canal sparse »,
-   comme les canaux Blender). Un os qui ne bouge pas ne s'écrit pas.
-2. **Os cité = ses composantes non précisées repassent au repos.** Pour renvoyer
-   un os au repos, on l'écrit donc explicitement : `"armL": {}`.
+1. **A bone absent from a key = value of the previous key** ("sparse channel",
+   like Blender channels). A bone that does not move is not written.
+2. **A bone cited = its unspecified components go back to rest.** To send a bone
+   back to rest, it is therefore written explicitly: `"armL": {}`.
 
-La règle est appliquée en un seul endroit (`iska_common.carry_keys`), utilisé à
-la fois par le générateur d'animations et par le packer.
+The rule is applied in a single place (`iska_common.carry_keys`), used both by the
+animation generator and by the packer.
 
-## Exemple d'asset
+## Example asset
 
-`assets/rabbit3.iska` (60 ko) :
+`assets/rabbit3.iska` (60 kB):
 
 | | |
 | :--- | :--- |
-| Panneau | 240 × 320 |
-| Os | 11 (`root`, `torso`, `head`, `earL/R`, `eyeL/R`, `armL/R`, `footL/R`) |
-| Parts | 10 (une par os sauf `root`) |
-| Animations | `idle_loop` (2400 ms, boucle, 28 clés) — `peek` (2700 ms, one-shot, 20 clés) |
-| Bloc pixels | 55 486 octets (10 cases RGB565) |
-| Total | 61 319 octets |
+| Panel | 240 x 320 |
+| Bones | 11 (`root`, `torso`, `head`, `earL/R`, `eyeL/R`, `armL/R`, `footL/R`) |
+| Parts | 10 (one per bone except `root`) |
+| Animations | `idle_loop` (2400 ms, loop, 28 keys) -- `peek` (2700 ms, one-shot, 20 keys) |
+| Pixel block | 55,486 bytes (10 RGB565 boxes) |
+| Total | 61,319 bytes |
 
-## Compatibilité / évolution
+## Compatibility / evolution
 
-* Le champ `version` de l'en-tête permet d'introduire un format v2 sans
-  ambiguïté : `Iska::parseAsset` refuse toute version qu'il ne connaît pas, avec
-  un message explicite, plutôt que de lire de travers.
-* Les champs `reserved`, `flags` et le bit 1+ des drapeaux d'animation sont
-  libres : c'est là qu'ira par exemple un miroir de sprite (`FLIP_X`) ou une
-  interpolation non linéaire par clé.
-* Les noms d'os et de parts **ne sont pas stockés** : le moteur travaille par
-  index. L'outillage Python leur donne des noms internes (`os0`, `part0`) quand
-  il relit un binaire, et s'appuie sur les JSON pour les noms réels.
-
+* The header `version` field makes it possible to introduce a v2 format without
+  ambiguity: `Iska::parseAsset` rejects any version it does not know, with an
+  explicit message, rather than reading it wrong.
+* The `reserved` fields, `flags` and bit 1+ of the animation flags are free: that
+  is where a sprite mirror (`FLIP_X`) or a per-key non-linear interpolation would
+  go.
+* Bone and part names **are not stored**: the engine works with indices. The
+  Python tooling gives them internal names (`os0`, `part0`) when it reads a binary
+  back, and relies on the JSON files for the real names.

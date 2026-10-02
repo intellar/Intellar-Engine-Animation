@@ -1,52 +1,53 @@
-"""Briques communes a la chaine Intellar-Engine-Animation.
+"""Shared building blocks of the Intellar-Engine-Animation chain.
 
-Ce module est le **jumeau Python** du runtime C++ (`src/iska_*.cpp`) : meme
-format binaire, meme math de blit, meme couleur de transparence. Les outils
-Python (`iska_pack`, `iska_preview`, `iska_clip_check`) et le runtime peuvent
-donc se controler l'un l'autre.
+This module is the **Python twin** of the C++ runtime (`src/Iska/*.cpp`): same
+binary format, same blit maths, same transparency colour. The Python tools
+(`iska_pack`, `iska_preview`, `iska_clip_check`) and the runtime can therefore
+check each other.
 
-Format ISKA v1 (little-endian, tout est en pixels ecran) :
+ISKA v1 format (little-endian, everything in screen pixels):
 
-  en-tete 32 o : "ISKA", u16 version, u16 headerBytes, u16 stageW, u16 stageH,
-                 u16 boneCount, u16 partCount, u16 animCount, u16 reserved,
-                 u32 pixelBytes, u32 pixelCount, u32 pixelCrc32
-  os     : boneCount x 12 o : i16 parent(-1 = racine), i16 restX, i16 restY,
-                              i16 restAngle(dixiemes de degre), u32 reserved
-  parts  : partCount x 26 o : i16 bone(-1 = aucun), i16 pivotX, i16 pivotY,
+  header 32 B : "ISKA", u16 version, u16 headerBytes, u16 stageW, u16 stageH,
+                u16 boneCount, u16 partCount, u16 animCount, u16 reserved,
+                u32 pixelBytes, u32 pixelCount, u32 pixelCrc32
+  bones  : boneCount x 12 B : i16 parent(-1 = root), i16 restX, i16 restY,
+                              i16 restAngle(tenths of a degree), u32 reserved
+  parts  : partCount x 26 B : i16 bone(-1 = none), i16 pivotX, i16 pivotY,
                               u16 spriteW, u16 spriteH, u16 drawOrder,
                               u16 flags, u16 reserved, u16 reserved2,
-                              u32 pixelOffset(octets), u32 pixelBytes
-                              -- la case sprite est contigue dans le bloc pixels
-                              (pixelOffset = octet du coin haut-gauche)
-  anims  : animCount x { u16 nameLen, nom UTF-8, u16 flags(1 = boucle),
+                              u32 pixelOffset(bytes), u32 pixelBytes
+                              -- the sprite box is contiguous inside the pixel
+                              block (pixelOffset = byte of the top-left corner)
+  anims  : animCount x { u16 nameLen, UTF-8 name, u16 flags(1 = loop),
                          u16 keyCount, u32 durationMs,
                          keyCount x { u16 tMs,
                                       boneCount x (i16 dx, i16 dy, i16 rot,
                                                    i16 sx, i16 sy) } }
-  pixels : bloc RGB565 des cases sprite, concatenees (pixelOffset/pixelBytes).
+  pixels : RGB565 block of the sprite boxes, concatenated (offset and size per
+           part).
 
-Transparence : un pixel **magenta** (RGB565 0xF81F) n'est jamais ecrit. Le
-packer transforme donc les pixels translucides du PNG en magenta ; c'est a
-l'artiste d'eviter de peindre du magenta pur.
+Transparency: a **magenta** pixel (RGB565 0xF81F) is never written. The packer
+therefore turns the translucent pixels of the PNG into magenta; avoiding pure
+magenta in the artwork is up to the artist.
 
-Transformations (identiques cote C++) : chaque os porte une part et definit une
-articulation. Pour un os :
+Transformations (identical on the C++ side): every bone carries a part and
+defines a joint. For a bone:
 
-    position_monde = position_parent + R(angle_parent) * (echelle_parent (.) rest_local)
-    angle_monde    = angle_parent + angle_local
-    echelle_monde  = echelle_locale            <- NON heritee, volontairement
+    world_position = parent_position + R(parent_angle) * (parent_scale (.) local_rest)
+    world_angle    = parent_angle + local_angle
+    world_scale    = local_scale              <- NOT inherited, on purpose
 
-L'echelle locale n'est pas heritee : reduire le torse ne deforme pas la tete, il
-la fait seulement descendre (utile pour un squash and stretch). L'echelle n'est
-appliquee qu'a la part dessinee par l'os.
+The local scale is not inherited: shrinking the torso does not deform the head,
+it only pulls it down (handy for squash and stretch). The scale is applied only
+to the part drawn by the bone.
 
-Une part est dessinee ainsi (P = pivot dans la case sprite, J = articulation) :
+A part is drawn like this (P = pivot inside the sprite box, J = joint):
 
-    avant : dst = J + R(angle) * (S * (p - P))
-    arriere : p  = P + S^-1 * R(-angle) * (dst - J)
+    forward : dst = J + R(angle) * (S * (p - P))
+    inverse : p   = P + S^-1 * R(-angle) * (dst - J)
 
-L'angle est en degres, **positif = horaire** a l'ecran (repere y vers le bas),
-0 = sprite non tourne.
+The angle is in degrees, **positive = clockwise** on screen (y axis downwards),
+0 = sprite not rotated.
 """
 from __future__ import annotations
 
@@ -61,16 +62,16 @@ BONE_BYTES = 12
 PART_BYTES = 26
 ANIM_FLAG_LOOP = 1
 
-ANGLE_SCALE = 10.0        # angles stockes en dixiemes de degre
-FIXED_SCALE = 10000.0     # echelles stockees en 1/10000 (10000 = x1)
-MAGENTA_565 = 0xF81F      # cle de transparence
+ANGLE_SCALE = 10.0        # angles stored in tenths of a degree
+FIXED_SCALE = 10000.0     # scales stored in 1/10000 (10000 = x1)
+MAGENTA_565 = 0xF81F      # transparency key
 MAX_U16 = 0xFFFF
 
 POS_LIMIT = 32767.0
 
 
 def round_i16(value: float) -> int:
-    """Arrondi borne a l'intervalle i16 (les champs du format sont en i16)."""
+    """Rounded, clamped to the i16 range (the format fields are i16)."""
     return max(-POS_LIMIT, min(POS_LIMIT, int(round(value))))
 
 
@@ -86,16 +87,16 @@ def rgb565_to_rgb(value: int):
 
 
 def new_frame(width: int, height: int, color: int = 0x0000):
-    """Framebuffer RGB565 (array('H'), ligne par ligne)."""
+    """RGB565 framebuffer (array('H'), row by row)."""
     return array.array("H", [color]) * (width * height)
 
 
 class Skeleton:
-    """Rig runtime : os + parts, et resolution d'une pose en placements ecran.
+    """Runtime rig: bones + parts, and resolution of a pose into screen placements.
 
-    Les os doivent etre ordonnes **parents avant enfants** (invariant du format).
-    Une pose est une liste de tuples `(dx, dy, dRot, sx, sy)` par os, en deltas
-    par rapport au repos.
+    Bones must be ordered **parents before children** (invariant of the format).
+    A pose is a list of tuples `(dx, dy, dRot, sx, sy)` per bone, as deltas from
+    the rest pose.
     """
 
     def __init__(self, rig: dict):
@@ -109,19 +110,19 @@ class Skeleton:
         return [(0.0, 0.0, 0.0, 1.0, 1.0) for _ in self.bones]
 
     def named_pose(self, values: dict):
-        """Pose depuis un dict `{os: {dx, dy, rot, sx, sy}}` (defauts = repos)."""
+        """Pose from a `{bone: {dx, dy, rot, sx, sy}}` dict (defaults = rest)."""
         pose = self.rest_pose()
         for name, delta in values.items():
             i = self.index.get(name)
             if i is None:
-                raise KeyError(f"os inconnu dans la pose : {name}")
+                raise KeyError(f"unknown bone in pose: {name}")
             pose[i] = (float(delta.get("dx", 0.0)), float(delta.get("dy", 0.0)),
                        float(delta.get("rot", 0.0)), float(delta.get("sx", 1.0)),
                        float(delta.get("sy", 1.0)))
         return pose
 
     def resolve_bones(self, pose):
-        """[(x, y, angle_monde, (sx, sy))] par os, dans l'ordre du rig."""
+        """[(x, y, world_angle, (sx, sy))] per bone, in rig order."""
         world = []
         for i, bone in enumerate(self.bones):
             dx, dy, drot, sx, sy = pose[i]
@@ -139,21 +140,21 @@ class Skeleton:
             world.append((pj_x + ux * cos_a - uy * sin_a,
                           pj_y + ux * sin_a + uy * cos_a,
                           p_angle + local_angle,
-                          # echelle volontairement NON heritee (voir docstring module)
+                          # scale deliberately NOT inherited (see module docstring)
                           (sx, sy)))
         return world
 
     def resolve(self, pose):
-        """[(part, (jx, jy), angle_monde, (sx, sy))] pret a etre blitte."""
+        """[(part, (jx, jy), world_angle, (sx, sy))] ready to be blitted."""
         world = self.resolve_bones(pose)
         return [(part, world[self.index[part["bone"]]][:2],
                  world[self.index[part["bone"]]][2],
                  world[self.index[part["bone"]]][3]) for part in self.parts]
 
     def draw(self, buf, pose, sprites):
-        """Dessine toutes les parts (ordre de dessin) dans un framebuffer RGB565.
+        """Draws every part (draw order) into an RGB565 framebuffer.
 
-        `sprites[part_name] = (array('H'), largeur, hauteur)`.
+        `sprites[part_name] = (array('H'), width, height)`.
         """
         for part, joint, angle, scale in self.resolve(pose):
             pixels, sw, sh = sprites[part["name"]]
@@ -162,9 +163,9 @@ class Skeleton:
 
 
 def image_to_sprite(img, size, alpha_threshold: int = 128):
-    """PNG (Pillow) -> array('H') RGB565 mis a l'echelle, fond magenta.
+    """PNG (Pillow) -> array('H') RGB565, scaled, magenta background.
 
-    C'est exactement ce que fait `iska_pack.py` avant d'ecrire le bloc pixels.
+    This is exactly what `iska_pack.py` does before writing the pixel block.
     """
     rgba = img.convert("RGBA").resize(size, __import__("PIL.Image", fromlist=["Image"]).LANCZOS)
     width, height = rgba.size
@@ -179,7 +180,7 @@ def image_to_sprite(img, size, alpha_threshold: int = 128):
 
 
 def frame_to_png(buf, width: int, height: int, path: str, scale: int = 1) -> None:
-    """Framebuffer RGB565 -> PNG (apercu / diff)."""
+    """RGB565 framebuffer -> PNG (preview / diff)."""
     from PIL import Image
     img = Image.new("RGB", (width, height))
     px = img.load()
@@ -193,11 +194,11 @@ def frame_to_png(buf, width: int, height: int, path: str, scale: int = 1) -> Non
 
 def blit_part(dst, dst_w: int, dst_h: int, pixels, sprite_w: int, sprite_h: int,
               pivot, joint, angle_deg: float, scale=(1.0, 1.0), key: bool = True) -> None:
-    """Dessine une case sprite tournee autour de son pivot, avec cle de couleur.
+    """Draws a sprite box rotated around its pivot, with colour keying.
 
-    `dst` : framebuffer RGB565 ; `pixels` : array('H') de sprite_w*sprite_h ;
-    `pivot`/`joint` : couples (x, y) ; `angle_deg` : horaire ; `scale` : (sx, sy).
-    Les pixels magenta (et, si `key`, transparents) sont sautes.
+    `dst`: RGB565 framebuffer; `pixels`: array('H') of sprite_w*sprite_h;
+    `pivot`/`joint`: (x, y) pairs; `angle_deg`: clockwise; `scale`: (sx, sy).
+    Magenta pixels (and, if `key` is set, transparent ones) are skipped.
     """
     if sprite_w <= 0 or sprite_h <= 0 or not pixels:
         return
@@ -208,7 +209,7 @@ def blit_part(dst, dst_w: int, dst_h: int, pixels, sprite_w: int, sprite_h: int,
     px, py = pivot
     jx, jy = joint
 
-    # boite englobante des quatre coins, apres rotation + echelle
+    # bounding box of the four corners, after rotation + scaling
     corners = []
     for cx, cy in ((0.0, 0.0), (float(sprite_w), 0.0),
                    (float(sprite_w), float(sprite_h)), (0.0, float(sprite_h))):
@@ -227,7 +228,7 @@ def blit_part(dst, dst_w: int, dst_h: int, pixels, sprite_w: int, sprite_h: int,
         row = y * dst_w
         for x in range(x0, x1 + 1):
             dx = (x + 0.5) - jx
-            # R(-a) puis inverse de l'echelle, puis retour au repere case sprite
+            # R(-a) then the inverse of the scale, then back into the sprite box
             rx = dx * cos_a + dy * sin_a
             ry = -dx * sin_a + dy * cos_a
             u = px + rx * inv_sx
@@ -241,20 +242,21 @@ def blit_part(dst, dst_w: int, dst_h: int, pixels, sprite_w: int, sprite_h: int,
             if value == MAGENTA_565:
                 continue
             dst[row + x] = value
+
 # --------------------------------------------------------------------------- #
 # Animations
 # --------------------------------------------------------------------------- #
 
 def sample_pose(anim: dict, t_ms: float):
-    """Pose interpolee lineairement a `t_ms` (cles triees).
+    """Pose interpolated linearly at `t_ms` (keys sorted).
 
-    Une animation en boucle est ramenee dans [0, duration) par l'appelant ; une
-    animation one-shot tient sa derniere pose au dela de la fin. Les cinq
-    composantes (dx, dy, rot, sx, sy) sont interpolees lineairement.
+    A looping animation is brought back into [0, duration) by the caller; a
+    one-shot animation holds its last pose past the end. The five components
+    (dx, dy, rot, sx, sy) are interpolated linearly.
     """
     keys = anim["keys"]
     if not keys:
-        raise ValueError(f"animation {anim['name']} sans cle")
+        raise ValueError(f"animation {anim['name']} has no key")
     if t_ms <= keys[0][0]:
         return keys[0][1]
     if t_ms >= keys[-1][0]:
@@ -270,20 +272,20 @@ def sample_pose(anim: dict, t_ms: float):
 
 
 def anim_time(anim: dict, elapsed_ms: float) -> float:
-    """Instant a echantillonner, en tenant compte de la boucle."""
+    """Instant to sample, taking the loop into account."""
     if anim.get("loop") and anim["duration"] > 0:
         return elapsed_ms % anim["duration"]
     return min(elapsed_ms, anim["duration"])
 
 
 def carry_keys(skeleton, keys):
-    """Poses completes `[(t, pose)]` a partir de cles **sparses**.
+    """Full poses `[(t, pose)]` from **sparse** keys.
 
-    Regle d'authoring (la meme dans tools/anims_rabbit3.py et iska_pack.py) : un
-    os absent d'une cle conserve la valeur de la cle precedente ; citer un os sans
-    preciser une composante remet cette composante au repos. Pour renvoyer un os au
-    repos, on l'ecrit donc explicitement (`"armL": {}`). Leve `KeyError` sur un
-    nom d'os inconnu.
+    Authoring rule (the same in tools/anims_rabbit3.py and iska_pack.py): a bone
+    missing from a key keeps the value of the previous key; naming a bone without
+    giving a component resets that component to rest. To send a bone back to
+    rest, write it explicitly (`"armL": {}`). Raises `KeyError` on an unknown
+    bone name.
     """
     out = []
     carried = {}
@@ -297,18 +299,18 @@ def carry_keys(skeleton, keys):
 
 
 # --------------------------------------------------------------------------- #
-# Format binaire
+# Binary format
 # --------------------------------------------------------------------------- #
 
 def build_iska(stage_w, stage_h, bones, parts, animations, pixels) -> bytes:
-    """Assemble un fichier .iska (voir la docstring du module).
+    """Assembles an .iska file (see the module docstring).
 
-    `bones`  : [{"parent": index|None, "rest": (x, y), "angle": degres}]
+    `bones`  : [{"parent": index|None, "rest": (x, y), "angle": degrees}]
     `parts`  : [{"bone": index|-1, "pivot": (x, y), "sprite": (w, h),
                  "draw_order": int, "flags": int,
-                 "pixel_offset": octets, "pixel_bytes": octets}]
+                 "pixel_offset": bytes, "pixel_bytes": bytes}]
     `anims`  : [{"name", "loop", "duration_ms", "keys": [(t_ms, pose)]}]
-    `pixels` : array('H') RGB565 (tout l'atlas, case par case)
+    `pixels` : array('H') RGB565 (the whole atlas, box by box)
     """
     import zlib
 
@@ -316,8 +318,8 @@ def build_iska(stage_w, stage_h, bones, parts, animations, pixels) -> bytes:
     for i, bone in enumerate(bones):
         parent = bone["parent"]
         if parent is not None and not 0 <= parent < i:
-            raise ValueError(f"os {i} : le parent {parent} doit preceder l'enfant "
-                             "(invariant du format ISKA)")
+            raise ValueError(f"bone {i}: parent {parent} must come before the child "
+                             "(ISKA format invariant)")
     pixel_bytes = array.array("H", pixels).tobytes()
 
     out = bytearray()
@@ -346,8 +348,8 @@ def build_iska(stage_w, stage_h, bones, parts, animations, pixels) -> bytes:
         out += struct.pack("<HHI", flags, len(keys), int(round(anim["duration_ms"])))
         for t_ms, pose in keys:
             if len(pose) != bone_count:
-                raise ValueError(f"{anim['name']} : pose de {len(pose)} os, "
-                                 f"{bone_count} attendus")
+                raise ValueError(f"{anim['name']}: pose of {len(pose)} bones, "
+                                 f"{bone_count} expected")
             out += struct.pack("<H", round_i16(t_ms))
             for dx, dy, rot, sx, sy in pose:
                 out += struct.pack("<hhhhh", round_i16(dx), round_i16(dy),
@@ -360,16 +362,16 @@ def build_iska(stage_w, stage_h, bones, parts, animations, pixels) -> bytes:
 
 
 def parse_iska(blob: bytes) -> dict:
-    """Relit un .iska (utilise par iska_preview / iska_info / iska_clip_check)."""
+    """Reads back an .iska (used by iska_preview / iska_info / iska_clip_check)."""
     import zlib
 
     if blob[:4] != MAGIC:
-        raise ValueError("ce n'est pas un fichier ISKA")
+        raise ValueError("this is not an ISKA file")
     (magic, version, header_bytes, stage_w, stage_h, bone_count, part_count,
      anim_count, _reserved, pixel_bytes_len, pixel_count, crc) = struct.unpack_from(
         "<4sHHHHHHHHIII", blob, 0)
     if version != VERSION:
-        raise ValueError(f"version ISKA {version} non geree (outil en v{VERSION})")
+        raise ValueError(f"unsupported ISKA version {version} (tool is at v{VERSION})")
     offset = header_bytes
 
     bones = []
@@ -410,7 +412,7 @@ def parse_iska(blob: bytes) -> dict:
 
     pixels_raw = blob[offset:offset + pixel_bytes_len]
     if zlib.crc32(pixels_raw) & 0xFFFFFFFF != crc:
-        raise ValueError("CRC du bloc de pixels invalide")
+        raise ValueError("invalid pixel block CRC")
     pixels = array.array("H")
     pixels.frombytes(pixels_raw[:pixel_count * 2])
     return {"version": version, "stage": [stage_w, stage_h], "bones": bones,
@@ -419,7 +421,7 @@ def parse_iska(blob: bytes) -> dict:
 
 
 def sprite_view(iska: dict, part: dict):
-    """(array('H'), largeur, hauteur) de la case d'une part, vue dans l'atlas."""
+    """(array('H'), width, height) of a part's box, seen inside the atlas."""
     width, height = part["sprite"]
     base = part["pixel_offset"] // 2
     out = array.array("H", bytes(width * height * 2))
@@ -430,20 +432,20 @@ def sprite_view(iska: dict, part: dict):
 
 
 def skeleton_from_iska(data: dict):
-    """`Skeleton` construit directement depuis un .iska relu.
+    """A `Skeleton` built straight from an .iska read back.
 
-    Les os et parts n'ont pas de nom dans le binaire (le moteur travaille par
-    index) : ils sont donc nommes `os0..osN` / `part0..partN` ici, uniquement
-    pour l'outillage Python.
+    Bones and parts have no name in the binary (the runtime works by index): they
+    are therefore named `bone0..boneN` / `part0..partN` here, only for the Python
+    tooling.
     """
     rig = {
         "stage": {"w": data["stage"][0], "h": data["stage"][1]},
-        "bones": [{"name": f"os{i}",
-                   "parent": None if b["parent"] is None else f"os{b['parent']}",
+        "bones": [{"name": f"bone{i}",
+                   "parent": None if b["parent"] is None else f"bone{b['parent']}",
                    "rest": b["rest"], "angle": b["angle"]}
                   for i, b in enumerate(data["bones"])],
         "parts": [{"name": f"part{i}",
-                   "bone": f"os{p['bone']}" if p["bone"] >= 0 else "os0",
+                   "bone": f"bone{p['bone']}" if p["bone"] >= 0 else "bone0",
                    "pivot": p["pivot"], "sprite": p["sprite"],
                    "draw_order": p["draw_order"], "_index": i}
                   for i, p in enumerate(data["parts"])],
@@ -452,7 +454,6 @@ def skeleton_from_iska(data: dict):
 
 
 def sprites_from_iska(data: dict, skeleton) -> dict:
-    """`{nom de part: (pixels, largeur, hauteur)}` attendu par `Skeleton.draw`."""
+    """`{part name: (pixels, width, height)}` as expected by `Skeleton.draw`."""
     return {part["name"]: sprite_view(data, data["parts"][part["_index"]])
             for part in skeleton.parts}
-

@@ -1,0 +1,269 @@
+"""Builds (and checks) assets/rabbit3.iska -- the whole chain in one command.
+
+    python tools/build_asset.py                  # rebuild + verify, using the JSON files
+    python tools/build_asset.py --check          # + compare with the C++ engine
+    python tools/build_asset.py --rig-from-blender   # re-read the .blend (joints moved)
+    python tools/build_asset.py --anims-from-blender # re-bake the actions of the .blend
+    python tools/build_asset.py --to-blender         # JSON -> bound .blend + actions
+
+By default nothing but the **versioned JSON files** is read: no Blender, no mouse.
+`tools/rigs/rabbit3.json` (runtime rig, in screen pixels) and
+`tools/animations/rabbit3.json` (the poses) are enough to rebuild an asset that must
+be **byte for byte** the shipped one -- that is what `--verify` proves, and it is
+the reason the `.iska` can be trusted without opening Blender.
+
+What each option adds:
+
+| option | what it reads | what it rewrites |
+| :--- | :--- | :--- |
+| (none) | the JSON files | `assets/rabbit3.iska` |
+| `--rig-from-blender` | `tools/source/rabbit3_rig.blend` | `tools/rigs/rabbit3.json` (+ a control PNG) |
+| `--anims-from-python` | `tools/anims_rabbit3.py` | `tools/animations/rabbit3.json` |
+| `--anims-from-blender` | the actions of `rabbit3_anim.blend` | `tools/animations/rabbit3.json` |
+| `--to-blender` | `rabbit3_rig.blend` + the JSON | `tools/source/rabbit3_anim.blend` |
+| `--check` | the built asset | nothing (runs `tools/iska_clip_check.py`) |
+
+`--check` runs automatically when the demo binary is found.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import subprocess
+import sys
+
+import open_blender                      # noqa: E402  (find_blender, a sibling tool)
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+DEMO_CANDIDATES = [os.path.join("build", "Release", "intellar_anim_demo.exe"),
+                   os.path.join("build", "intellar_anim_demo"),
+                   os.path.join("build", "Release", "intellar_anim_demo")]
+
+
+def read_bytes(path: str):
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def run(command: list) -> None:
+    """Runs one step of the chain (in the repository root), echoing it."""
+    print(f"[build_asset] $ {' '.join(command)}")
+    if subprocess.run(command, cwd=ROOT).returncode != 0:
+        raise SystemExit(f"[build_asset] step failed: {command[0]}")
+
+
+def python_tool(name: str, *arguments: str) -> None:
+    run([sys.executable, os.path.join(HERE, name), *arguments])
+
+
+def blender_tool(blender: str, blend: str, name: str, *arguments: str) -> None:
+    run([blender, "-b", blend, "--python", os.path.join(HERE, name),
+         "--", *arguments])
+
+
+def find_demo(explicit: str = "") -> str:
+    if explicit:
+        return explicit if os.path.isfile(explicit) else ""
+    return next((path for path in DEMO_CANDIDATES if os.path.isfile(os.path.join(ROOT, path))),
+                "")
+
+
+class Paths:
+    """Every file the chain reads or writes, relative to the repository root."""
+
+    def __init__(self, args):
+        self.id = args.id
+        self.blend = args.blend or os.path.join("tools", "source", f"{self.id}_rig.blend")
+        self.anim_blend = args.anim_blend or os.path.join("tools", "source",
+                                                          f"{self.id}_anim.blend")
+        self.scene = os.path.join("build", self.id, "scene.json")
+        self.rig = args.rig_out or os.path.join("tools", "rigs", f"{self.id}.json")
+        self.anims = args.anims_out or os.path.join("tools", "animations",
+                                                    f"{self.id}.json")
+        self.asset = args.out or os.path.join("assets", f"{self.id}.iska")
+        self.preview = os.path.join("build", self.id, "rig_preview.png")
+
+    def require(self, *paths: str) -> None:
+        for path in paths:
+            if not os.path.isfile(os.path.join(ROOT, path)):
+                raise SystemExit(f"[build_asset] missing file: {path}")
+
+
+def export_scene(paths: Paths, blender: str) -> None:
+    """Blender -> scene.json: the plane placement + the bone heads (read only)."""
+    paths.require(paths.blend)
+    print(f"[build_asset] reading {paths.blend} (planes + armature)")
+    blender_tool(blender, paths.blend, "blender_export.py", "--out", paths.scene)
+
+
+def build_rig(paths: Paths) -> None:
+    """scene.json -> the runtime rig in screen pixels (+ the control PNG)."""
+    print(f"[build_asset] rig in screen pixels -> {paths.rig}")
+    python_tool("rig_build.py", paths.scene, "--id", paths.id, "--out", paths.rig,
+                "--preview", paths.preview)
+
+
+def build_anims(paths: Paths, blender: str, from_python: bool, from_blender: bool) -> None:
+    """The pose list: kept as it is, regenerated by the script, or re-baked."""
+    if from_blender:
+        paths.require(paths.anim_blend)
+        print(f"[build_asset] baking the actions of {paths.anim_blend}")
+        blender_tool(blender, paths.anim_blend, "blender_bake_anims.py",
+                     "--rig", paths.rig, "--out", paths.anims)
+    elif from_python:
+        print(f"[build_asset] running anims_{paths.id}.py -> {paths.anims}")
+        python_tool(f"anims_{paths.id}.py", "--rig", paths.rig, "--out", paths.anims)
+    else:
+        print(f"[build_asset] keeping {paths.anims} (add --anims-from-python or "
+              f"--anims-from-blender to regenerate it)")
+
+
+def pack_asset(paths: Paths) -> None:
+    """rig + poses + PNGs -> the self-contained .iska."""
+    paths.require(paths.rig, paths.anims)
+    print(f"[build_asset] packing -> {paths.asset}")
+    python_tool("iska_pack.py", "--rig", paths.rig, "--anims", paths.anims,
+                "--out", paths.asset)
+
+
+def to_blender(paths: Paths, blender: str) -> None:
+    """The .blend + the JSON -> a bound .blend whose actions hold the animations."""
+    paths.require(paths.blend, paths.anims)
+    print(f"[build_asset] binding {paths.blend} -> {paths.anim_blend}")
+    blender_tool(blender, paths.blend, "blender_bind.py", "--out", paths.anim_blend)
+    print(f"[build_asset] adding the animations of {paths.anims} as Blender actions")
+    blender_tool(blender, paths.anim_blend, "blender_import_anims.py",
+                 "--anims", paths.anims, "--out", paths.anim_blend)
+
+
+def verify_asset(paths: Paths, previous, re_baked: bool = False) -> int:
+    """Byte-for-byte comparison with the asset that was there before the build.
+
+    `re_baked` (--anims-from-blender): a re-baked key set is *equivalent*, not equal
+    (same poses to within one wire step, different keys and size), so a difference is
+    reported but is not a failure.
+    """
+    current = read_bytes(os.path.join(ROOT, paths.asset))
+    if current is None:
+        print(f"[build_asset] FAILED: {paths.asset} was not produced")
+        return 1
+    if previous is None:
+        print(f"[build_asset] {paths.asset}: {len(current)} B (no previous asset), "
+              f"sha256 {sha256(current)}")
+        return 0
+    if current == previous:
+        print(f"[build_asset] {paths.asset}: rebuilt **byte for byte** "
+              f"({len(current)} B, sha256 {sha256(current)})")
+        return 0
+    offset = next((i for i, (a, b) in enumerate(zip(previous, current)) if a != b),
+                  min(len(previous), len(current)))
+    if re_baked:
+        print(f"[build_asset] {paths.asset}: {len(current)} B now, {len(previous)} B "
+              f"before, first difference at byte {offset}")
+        print("[build_asset]   expected after --anims-from-blender: Blender gives back "
+              "an equivalent key set, not the hand-written one (same poses to within "
+              "one wire step, more keys)")
+        print("[build_asset]   the fidelity is measured by python tools/anim_roundtrip.py; "
+              "the C++ comparison below still runs on this new asset")
+        return 0
+    print(f"[build_asset] DIFFERENT: {len(previous)} B before, {len(current)} B now, "
+          f"first difference at byte {offset}")
+    print(f"[build_asset]   before sha256 {sha256(previous)}")
+    print(f"[build_asset]   now    sha256 {sha256(current)}")
+    print(f"[build_asset] the file was updated: commit it if the change is intended, "
+          f"otherwise check the chain (`--no-verify` skips this comparison)")
+    return 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--id", default="rabbit3", help="asset name")
+    ap.add_argument("--blend", default="",
+                    help="source .blend (default: tools/source/<id>_rig.blend)")
+    ap.add_argument("--anim-blend", default="",
+                    help="animated .blend (default: tools/source/<id>_anim.blend)")
+    ap.add_argument("--rig-out", default="", help="runtime rig JSON to write")
+    ap.add_argument("--anims-out", default="", help="animations JSON to write")
+    ap.add_argument("--out", default="", help=".iska to write")
+    ap.add_argument("--rig-from-blender", action="store_true",
+                    help="re-read the .blend: plane placement + bone heads")
+    ap.add_argument("--anims-from-python", action="store_true",
+                    help="regenerate the poses with tools/anims_<id>.py")
+    ap.add_argument("--anims-from-blender", action="store_true",
+                    help="re-bake the poses from the actions of the animated .blend")
+    ap.add_argument("--to-blender", action="store_true",
+                    help="the other way round: JSON -> bound .blend + actions")
+    ap.add_argument("--blender", default="", help="path to blender(.exe)")
+    ap.add_argument("--demo", default="", help="demo binary used by --check")
+    ap.add_argument("--check", dest="check", action="store_true", default=None,
+                    help="compare with the C++ engine (default: when the demo exists)")
+    ap.add_argument("--no-check", dest="check", action="store_false")
+    ap.add_argument("--no-verify", dest="verify", action="store_false",
+                    help="skip the byte-for-byte comparison with the previous asset")
+    return ap
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    paths = Paths(args)
+    needs_blender = args.rig_from_blender or args.anims_from_blender or args.to_blender
+    blender = open_blender.find_blender(args.blender) if needs_blender else ""
+
+    if args.to_blender:
+        print(f"[build_asset] {paths.id}: the JSON files -> Blender")
+        to_blender(paths, blender)
+        print("[build_asset] open it with: python tools/open_blender.py anim")
+        print("[build_asset] after editing the actions: python tools/build_asset.py "
+              "--anims-from-blender")
+        return
+
+    previous = read_bytes(os.path.join(ROOT, paths.asset))
+    if args.rig_from_blender:
+        export_scene(paths, blender)
+        build_rig(paths)
+
+    have_anims = os.path.isfile(os.path.join(ROOT, paths.anims))
+    if not have_anims and not (args.anims_from_python or args.anims_from_blender):
+        print(f"[build_asset] no animations yet: {paths.anims}")
+        print(f"[build_asset]   write them: python tools/anims_{paths.id}.py "
+              f"--rig {paths.rig}")
+        print(f"[build_asset]   or scaffold the character: "
+              f"python tools/new_character.py {paths.id}")
+        print(f"[build_asset] done (rig only): {paths.rig}")
+        return
+
+    build_anims(paths, blender, args.anims_from_python, args.anims_from_blender)
+    pack_asset(paths)
+
+    failures = verify_asset(paths, previous, re_baked=args.anims_from_blender) \
+        if args.verify else 0
+
+    demo = find_demo(args.demo)
+    if args.check is None:
+        args.check = bool(demo)
+    if not args.check:
+        print("[build_asset] C++ check not run (`--check` to run it)")
+    elif not demo:
+        print("[build_asset] C++ check skipped: no demo binary "
+              "(cmake --build build --config Release --target intellar_anim_demo)")
+    else:
+        print(f"[build_asset] comparing with the C++ engine ({demo})")
+        python_tool("iska_clip_check.py", "--iska", paths.asset, "--demo", demo)
+
+    print(f"[build_asset] done: {paths.asset}")
+    print("[build_asset] look at it: python tools/iska_view.py")
+    print("[build_asset] play it on the panel: python tools/flash_esp32.py --help")
+    if failures:
+        raise SystemExit(f"[build_asset] {failures} check(s) failed")
+
+
+if __name__ == "__main__":
+    main()
