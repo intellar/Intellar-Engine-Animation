@@ -243,7 +243,9 @@ def main() -> None:
                     help="scale of the default tolerance (1 = half a wire step)")
     ap.add_argument("--dense", action="store_true",
                     help="keep one key per frame (no pruning)")
-    ap.add_argument("--only", default="", help="comma-separated action names")
+    ap.add_argument("--only", default="",
+                    help="comma-separated action names to bake (the other animations "
+                         "already in the JSON are kept)")
     args = ap.parse_args(argv_after_dashdash())
     out = resolve(args.out)
 
@@ -274,11 +276,18 @@ def main() -> None:
         raise SystemExit("[bake_anims] no action in this .blend: import the "
                          "animations first (tools/blender_import_anims.py)")
 
-    # metadata of the file being rewritten (`character`, `rig`, `notes`...) is kept
+    # metadata of the file being rewritten (`character`, `rig`, `notes`...) is kept.
+    # With `--only`, only the selected animations are rewritten: the others already in
+    # the JSON are kept as they are, so baking one animation does not drop the rest.
     document = {}
     if os.path.isfile(out):
         document = biska.load_json(out)
-    document["animations"] = {}
+    existing = document.get("animations", {})
+    if wanted:
+        document["animations"] = {name: anim for name, anim in existing.items()
+                                  if name not in wanted}
+    else:
+        document["animations"] = {}
 
     print(f"[bake_anims] {len(actions)} action(s) -> {out}")
     for action in actions:

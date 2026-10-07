@@ -642,6 +642,24 @@ with `--only hop` to bake a single action and `--dense` for one key per frame.) 
 interpolation itself is free: the bake measures frames, so a Bezier ease comes back as
 it looks -- with more keys than the LINEAR curves the importer writes, that is all.
 
+To iterate on **one** animation (the *write it in Python, then retouch it in Blender*
+loop) without disturbing the others, both directions take `--only`, and they are
+**symmetric and safe**:
+
+```powershell
+# 1. rewrite one animation in tools/anims_mybot.py, then push just it into Blender
+#    (the other actions already in the .blend are left untouched):
+python tools/open_blender.py --file tools/source/mybot_anim.blend --script blender_import_anims.py -- `
+    --anims tools/animations/mybot.json --only hop --out tools/source/mybot_anim.blend
+# 2. scrub / retouch the `hop` action in Blender, save, then bake only it back
+#    (the other animations already in the JSON are kept):
+python tools/open_blender.py --file tools/source/mybot_anim.blend --script blender_bake_anims.py -- `
+    --rig tools/rigs/mybot.json --only hop --out tools/animations/mybot.json
+```
+
+`--only` on the bake **merges** into the existing JSON instead of replacing the whole
+`animations` table, so re-baking one animation never drops the rest.
+
 **Write it in Python (simplest).** `tools/anims_rabbit3.py` is the full example and
 `tools/new_character.py` writes a starting template (poses in screen pixels, deltas
 against the rest pose, validated against the rig):

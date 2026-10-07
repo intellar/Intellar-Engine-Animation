@@ -215,6 +215,10 @@ def main() -> None:
     ap.add_argument("--dense", action="store_true",
                     help="one key per 10 ms frame instead of one per JSON key (a wall "
                          "of keys: kept for sculpting a curve from scratch)")
+    ap.add_argument("--only", default="",
+                    help="comma-separated animation names to import (default: all of "
+                         "them; the other actions already in the .blend are left "
+                         "untouched)")
     args = ap.parse_args(argv_after_dashdash())
 
     arm = armature()
@@ -236,9 +240,19 @@ def main() -> None:
         print(f"[import_anims] note: could not force the default interpolation "
               f"({exc}); check the curves are linear")
 
-    print(f"[import_anims] {args.anims}: {len(document['animations'])} animation(s)")
+    wanted = [name.strip() for name in args.only.split(",") if name.strip()]
+    animations = document["animations"]
+    if wanted:
+        unknown = [name for name in wanted if name not in animations]
+        if unknown:
+            raise SystemExit(f"[import_anims] unknown animation(s) {unknown}: the "
+                             f"JSON has {', '.join(animations) or '(none)'}")
+    print(f"[import_anims] {args.anims}: {len(animations)} animation(s)"
+          + (f", importing {', '.join(wanted)}" if wanted else ""))
     reports = []
-    for order, (name, anim) in enumerate(document["animations"].items()):
+    for order, (name, anim) in enumerate(animations.items()):
+        if wanted and name not in wanted:
+            continue
         report = import_animation(arm, skeleton, rig, name, anim, order, args.dense)
         reports.append(report)
         where = "one per 10 ms frame" if report["dense"] \
