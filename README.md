@@ -5,8 +5,12 @@ a **rabbit3** pixel-art character, rigged and animated, played on the **ILI9341
 240x320** panel (the portrait format of the robot).
 
 project homepage: https://www.intellar.ca/blog/high-performance-blender-animation-on-esp32
+
+
 youtube demo: 
+
 https://youtube.com/shorts/1qVl1EnIAbE
+
 https://youtube.com/shorts/eF7kYPP8HNs
 
 
